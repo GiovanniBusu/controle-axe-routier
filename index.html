@@ -1,0 +1,1484 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Contrôle Axe Routier VSS</title>
+<style>
+:root{
+  --bg:#f7f8fa; --panel:#ffffff; --text:#1a1d23; --muted:#6b7280; --border:#e3e6ea;
+  --accent:#1a3c6e; --accent-fg:#ffffff; --ok-fg:#1a7f37; --ok-bg:#e6f4ea;
+  --fail-fg:#b42318; --fail-bg:#fde8e8; --info-fg:#555; --info-bg:#eee;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15181d; --panel:#1d2128; --text:#e8eaed; --muted:#9aa2ad; --border:#2b3038;
+    --accent:#6fa8dc; --accent-fg:#0b1220; --ok-fg:#4ade80; --ok-bg:#103018;
+    --fail-fg:#f87171; --fail-bg:#3a1414; --info-fg:#aab;--info-bg:#2a2d33;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15181d; --panel:#1d2128; --text:#e8eaed; --muted:#9aa2ad; --border:#2b3038;
+  --accent:#6fa8dc; --accent-fg:#0b1220; --ok-fg:#4ade80; --ok-bg:#103018;
+  --fail-fg:#f87171; --fail-bg:#3a1414; --info-fg:#aab;--info-bg:#2a2d33;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:14px;}
+header{padding:16px 20px;border-bottom:1px solid var(--border);background:var(--panel);}
+header h1{font-size:18px;margin:0 0 2px;}
+header p{margin:0;color:var(--muted);font-size:12px;}
+.wrap{padding:16px;max-width:1200px;margin:0 auto;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px;}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;}
+.field{display:flex;flex-direction:column;gap:4px;min-width:120px;}
+.field label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+input,select{padding:7px 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;}
+button{padding:8px 14px;border:none;border-radius:7px;background:var(--accent);color:var(--accent-fg);font-size:13px;font-weight:600;cursor:pointer;}
+button.secondary{background:transparent;border:1px solid var(--accent);color:var(--accent);}
+button:disabled{opacity:.45;cursor:not-allowed;}
+button:hover:not(:disabled){filter:brightness(1.08);}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:12px;flex-wrap:wrap;}
+.tab{padding:8px 14px;cursor:pointer;border-radius:8px 8px 0 0;color:var(--muted);font-weight:600;font-size:13px;}
+.tab.active{color:var(--accent);background:var(--panel);border:1px solid var(--border);border-bottom:none;margin-bottom:-1px;}
+.tabpanel{display:none;}
+.tabpanel.active{display:block;}
+svg.view{width:100%;height:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;}
+table{width:100%;border-collapse:collapse;font-size:12.5px;}
+th{text-align:left;padding:6px 8px;background:var(--accent);color:var(--accent-fg);position:sticky;top:0;}
+td{padding:5px 8px;border-bottom:1px solid var(--border);}
+tr:hover td{background:rgba(127,127,127,.06);}
+.badge{padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap;}
+.badge.ok{color:var(--ok-fg);background:var(--ok-bg);}
+.badge.fail{color:var(--fail-fg);background:var(--fail-bg);}
+.badge.info{color:var(--info-fg);background:var(--info-bg);}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin:6px 0 10px;flex-wrap:wrap;}
+.legend span{display:inline-flex;align-items:center;gap:5px;}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
+.summary-cards{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+.card{border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:150px;}
+.card b{font-size:20px;display:block;}
+.card .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;}
+.hint{color:var(--muted);font-size:11.5px;margin-top:4px;}
+.tablewrap{max-height:420px;overflow:auto;border:1px solid var(--border);border-radius:8px;}
+.filename-list{font-size:12px;color:var(--muted);margin-top:6px;}
+#status-msg{font-size:12.5px;margin-top:8px;min-height:16px;}
+#status-msg.err{color:var(--fail-fg);}
+#status-msg.ok{color:var(--ok-fg);}
+</style>
+
+<header>
+  <h1>Contrôle Axe Routier — VSS / OETV / OCR</h1>
+  <p>Import LandXML · géométrie horizontale/verticale · gabarit véhicule &amp; giration · export Rapport / Excel / DXF</p>
+</header>
+
+<div class="wrap">
+
+  <div class="panel">
+    <div class="row">
+      <div class="field" style="min-width:220px;">
+        <label>Fichier(s) LandXML (.xml)</label>
+        <input type="file" id="fileInput" accept=".xml" multiple>
+      </div>
+      <div class="field">
+        <label>Axe</label>
+        <select id="alignSelect" disabled><option>— importer un fichier —</option></select>
+      </div>
+      <div class="field">
+        <label>Vp — vitesse projet (km/h)</label>
+        <input type="number" id="pVp" value="80" step="5" min="20" max="140">
+      </div>
+      <div class="field">
+        <label>f_T — frottement transversal (R_min, Tab. 17.7 CH)</label>
+        <input type="number" id="pFt" value="0.12" step="0.01" min="0.01" max="0.3">
+      </div>
+      <div class="field">
+        <label>Référentiel f_L (Tab. 17.7 CH)</label>
+        <select id="pFlRegime">
+          <option value="ch_autres" selected>Autres routes</option>
+          <option value="ch_rgd">Routes à grand débit</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>f_L — frottement longitudinal (S_A)</label>
+        <input type="number" id="pFl" value="0.38" step="0.01" min="0.1" max="0.6">
+      </div>
+      <div class="field">
+        <label>q_design (dévers max de calcul, %)</label>
+        <input type="number" id="pQ" value="7" step="0.5" min="-10" max="10">
+      </div>
+      <div class="field">
+        <label>t — temps de réaction (s)</label>
+        <input type="number" id="pTr" value="2.0" step="0.1" min="0.5" max="4">
+      </div>
+      <div class="field">
+        <label>Véhicule gabarit (OETV)</label>
+        <select id="pVehicle">
+          <option value="VL">Voiture légère</option>
+          <option value="Bus12" selected>Bus 12 m</option>
+          <option value="Bus15">Bus 15 m</option>
+          <option value="Camion1">Camion 1</option>
+          <option value="Camion2">Camion 2</option>
+        </select>
+      </div>
+      <div class="field" title="Rayon en dessous duquel une courbe est traitée comme une manœuvre de giration (carrefour, raquette de retournement) et soumise au contrôle de l'anneau OETV (art. 40 : De≤25,00 m, Di≥10,60 m). Au-delà de ce seuil, la courbe est considérée comme une courbe courante de tracé : seule la surlargeur de balayage B est donnée à titre indicatif, sans contrôle conforme/non conforme sur l'anneau de giration.">
+        <label>Seuil giration (m)</label>
+        <input type="number" id="pGiro" value="30" step="1" min="5" max="60">
+      </div>
+      <div class="field">
+        <label>Catégorie surlargeur (VSS 40 105b)</label>
+        <select id="pSurlCat">
+          <option value="A">A — Semi-remorque / car / bus articulé (D=10,0m)</option>
+          <option value="B" selected>B — Camion 3-4 essieux / bus standard (D=8,7m)</option>
+          <option value="C">C — Camion ≤6,5t (D=6,7m)</option>
+          <option value="D">D — Voiture particulière (D=4,0m)</option>
+        </select>
+      </div>
+      <div class="field">
+        <button id="btnRecalc">Recalculer</button>
+      </div>
+    </div>
+    <div id="status-msg"></div>
+    <div class="filename-list" id="fileList"></div>
+  </div>
+
+  <div class="panel" id="resultsPanel" style="display:none;">
+    <div class="summary-cards" id="summaryCards"></div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="situation">Situation (plan)</div>
+      <div class="tab" data-tab="etendu">Étendu (profil en long)</div>
+      <div class="tab" data-tab="tables">Tableaux</div>
+      <div class="tab" data-tab="export">Export</div>
+    </div>
+
+    <div class="tabpanel active" id="tab-situation">
+      <div class="legend">
+        <span><span class="dot" style="background:#1a7f37"></span>Conforme</span>
+        <span><span class="dot" style="background:#b42318"></span>Non conforme</span>
+        <span><span class="dot" style="background:#888"></span>Info / courant</span>
+      </div>
+      <svg class="view" id="svgPlan" viewBox="0 0 1000 600"></svg>
+      <p class="hint">Vue en plan (Nord en haut). Couleur = statut du contrôle géométrique horizontal (R≥R_min, A≥A_min, L≤20·Vp).</p>
+    </div>
+
+    <div class="tabpanel" id="tab-etendu">
+      <div class="legend">
+        <span><span class="dot" style="background:#1a7f37"></span>Conforme</span>
+        <span><span class="dot" style="background:#b42318"></span>Non conforme</span>
+        <span><span class="dot" style="background:#888"></span>Info</span>
+      </div>
+      <svg class="view" id="svgProfile" viewBox="0 0 1000 400"></svg>
+      <p class="hint">Profil en long (échelle verticale exagérée x5 pour lisibilité). Couleur = statut (Rv≥Rv-min confort, déclivité≤8%).</p>
+    </div>
+
+    <div class="tabpanel" id="tab-tables">
+      <h3 style="margin-top:0;">Géométrie horizontale</h3>
+      <div class="tablewrap"><table id="tblHoriz"></table></div>
+      <h3>Géométrie verticale</h3>
+      <div class="tablewrap"><table id="tblVert"></table></div>
+      <h3>Gabarit véhicule / giration</h3>
+      <div class="tablewrap"><table id="tblGabarit"></table></div>
+      <h3>Surlargeur en courbe (VSS 40 105b)</h3>
+      <div class="tablewrap"><table id="tblSurl"></table></div>
+      <h3>Clothoïdes en S (A1/A2)</h3>
+      <div class="tablewrap"><table id="tblS"></table></div>
+    </div>
+
+    <div class="tabpanel" id="tab-export">
+      <p>Les fichiers sont téléchargés directement par le navigateur.</p>
+      <div class="row">
+        <button id="btnExportReport">📄 Export Rapport (.html)</button>
+        <button id="btnExportExcel">📊 Export Excel (.xlsx)</button>
+        <button id="btnExportDxf">📐 Export DXF (.dxf)</button>
+      </div>
+      <p class="hint" id="exportHint"></p>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+/* ============================================================
+   RoadEngine — moteur LandXML / conformité VSS-OETV-OCR (inline, identique à engine.js)
+   ============================================================ */
+/* ============================================================
+   Moteur de calcul — Contrôle Axe Routier
+   Parsing LandXML, géométrie horizontale/verticale, conformité VSS/OETV/OCR
+   Fonctionne en navigateur (DOMParser) et en Node (xmldom fourni par l'appelant)
+   ============================================================ */
+
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) {
+    module.exports = factory();
+  } else {
+    root.RoadEngine = factory();
+  }
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  const NS = 'http://www.landxml.org/schema/LandXML-1.2';
+
+  // ---------- Utilitaires XML ----------
+  function getAttr(el, name, dflt) {
+    const v = el.getAttribute(name);
+    return v === null || v === undefined || v === '' ? dflt : v;
+  }
+  function fAttr(el, name, dflt) {
+    const v = getAttr(el, name, null);
+    if (v === null) return dflt;
+    const n = parseFloat(v);
+    return isNaN(n) ? dflt : n;
+  }
+  function childrenByLocalName(el, name) {
+    const out = [];
+    for (let i = 0; i < el.childNodes.length; i++) {
+      const c = el.childNodes[i];
+      if (c.nodeType === 1 && (c.localName === name || c.nodeName === name || c.nodeName.endsWith(':' + name))) {
+        out.push(c);
+      }
+    }
+    return out;
+  }
+  function firstByLocalName(el, name) {
+    const r = childrenByLocalName(el, name);
+    return r.length ? r[0] : null;
+  }
+  function allDescendantsByLocalName(doc, name) {
+    // works with DOMParser (no namespace-aware getElementsByTagNameNS reliability issues)
+    const all = doc.getElementsByTagName('*');
+    const out = [];
+    for (let i = 0; i < all.length; i++) {
+      const n = all[i];
+      if (n.localName === name || n.nodeName === name || n.nodeName.endsWith(':' + name)) out.push(n);
+    }
+    return out;
+  }
+  function textOf(el) {
+    return (el.textContent || '').trim();
+  }
+  function parsePoint(el) {
+    const t = textOf(el).split(/\s+/).map(Number);
+    return { N: t[0], E: t[1] }; // LandXML <Start>/<End>/... = Northing Easting
+  }
+
+  // ---------- Détection unité angulaire ----------
+  function detectAngularUnit(doc) {
+    const units = allDescendantsByLocalName(doc, 'Metric')[0] || allDescendantsByLocalName(doc, 'Imperial')[0];
+    if (units) {
+      const au = units.getAttribute('angularUnit');
+      if (au) return au.indexOf('radian') >= 0 ? 'radians' : 'degrees';
+    }
+    return 'degrees';
+  }
+  function toRad(val, unit) {
+    return unit === 'radians' ? val : (val * Math.PI / 180);
+  }
+
+  // ---------- Parsing d'un fichier LandXML (texte) ----------
+  function parseLandXML(xmlText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, 'application/xml');
+    const perr = doc.getElementsByTagName('parsererror');
+    if (perr && perr.length) {
+      throw new Error('XML invalide : ' + perr[0].textContent.slice(0, 300));
+    }
+    const angUnit = detectAngularUnit(doc);
+    const alignEls = allDescendantsByLocalName(doc, 'Alignment');
+    if (!alignEls.length) throw new Error('Aucun élément <Alignment> trouvé dans ce fichier.');
+
+    const alignments = alignEls.map(a => parseAlignment(a, angUnit));
+    return { angularUnit: angUnit, alignments };
+  }
+
+  function parseAlignment(alignEl, angUnit) {
+    const name = getAttr(alignEl, 'name', '(sans nom)');
+    const staStart = fAttr(alignEl, 'staStart', 0);
+    const length = fAttr(alignEl, 'length', 0);
+    const coordGeom = firstByLocalName(alignEl, 'CoordGeom');
+    const horiz = [];
+    let cum = staStart;
+    let prevDir = null; // continuité tangentielle — comble l'absence de dirStart sur certains exports (ex. clothoïdes AutoCAD)
+    if (coordGeom) {
+      for (let i = 0; i < coordGeom.childNodes.length; i++) {
+        const el = coordGeom.childNodes[i];
+        if (el.nodeType !== 1) continue;
+        const tag = el.localName || el.nodeName.split(':').pop();
+        if (tag !== 'Line' && tag !== 'Curve' && tag !== 'Spiral') continue;
+        const len = fAttr(el, 'length', 0);
+        const item = {
+          type: tag,
+          kmStart: cum,
+          kmEnd: cum + len,
+          length: len,
+          rot: getAttr(el, 'rot', ''),
+        };
+        const startP = firstByLocalName(el, 'Start');
+        const endP = firstByLocalName(el, 'End');
+        if (startP) item.start = parsePoint(startP);
+        if (endP) item.end = parsePoint(endP);
+
+        if (tag === 'Line') {
+          item.dir = toRad(fAttr(el, 'dir', 0), angUnit);
+          item.dirStart = item.dir;
+          item.dirEnd = item.dir;
+          prevDir = item.dirEnd;
+        } else if (tag === 'Curve') {
+          item.radius = fAttr(el, 'radius', null);
+          const centerP = firstByLocalName(el, 'Center');
+          if (centerP) item.center = parsePoint(centerP);
+          item.dirStart = el.hasAttribute('dirStart') ? toRad(fAttr(el, 'dirStart', 0), angUnit) : prevDir;
+          item.dirEnd = el.hasAttribute('dirEnd') ? toRad(fAttr(el, 'dirEnd', 0), angUnit) : null;
+          item.delta = toRad(fAttr(el, 'delta', 0), angUnit);
+          if (item.dirEnd === null) {
+            // dirEnd absent : dérivé via delta + sens de rotation
+            // convention LandXML = angle trigo standard (CCW+) ; 'cw' (horaire réel) => angle décroît
+            const sgn = item.rot === 'cw' ? -1 : 1;
+            item.dirEnd = (item.dirStart || 0) + sgn * item.delta;
+          }
+          prevDir = item.dirEnd;
+        } else if (tag === 'Spiral') {
+          const rs = getAttr(el, 'radiusStart', 'INF');
+          const re = getAttr(el, 'radiusEnd', 'INF');
+          item.radiusStart = rs === 'INF' ? Infinity : parseFloat(rs);
+          item.radiusEnd = re === 'INF' ? Infinity : parseFloat(re);
+          item.dirStart = el.hasAttribute('dirStart') ? toRad(fAttr(el, 'dirStart', 0), angUnit) : prevDir;
+          let thetaMag;
+          if (el.hasAttribute('theta')) {
+            thetaMag = Math.abs(toRad(fAttr(el, 'theta', 0), angUnit));
+          } else {
+            const k0 = isFinite(item.radiusStart) ? 1 / item.radiusStart : 0;
+            const k1 = isFinite(item.radiusEnd) ? 1 / item.radiusEnd : 0;
+            thetaMag = Math.abs((k0 + k1) / 2 * len);
+          }
+          item.dirEnd = el.hasAttribute('dirEnd')
+            ? toRad(fAttr(el, 'dirEnd', 0), angUnit)
+            : (item.dirStart || 0) + (item.rot === 'cw' ? -1 : 1) * thetaMag;
+          prevDir = item.dirEnd;
+          const constant = getAttr(el, 'constant', null);
+          if (constant !== null) {
+            item.A = parseFloat(constant);
+          } else {
+            const Rfin = isFinite(item.radiusStart) ? item.radiusStart : item.radiusEnd;
+            item.A = isFinite(Rfin) ? Math.sqrt(Rfin * len) : null;
+          }
+        }
+        if (item.dirStart == null) item.dirStart = 0; // 1er élément sans direction exploitable (cas limite)
+        horiz.push(item);
+        cum += len;
+      }
+    }
+
+    // Profil en long
+    const profileEl = firstByLocalName(alignEl, 'Profile');
+    const vert = [];
+    if (profileEl) {
+      const profAlign = firstByLocalName(profileEl, 'ProfAlign');
+      if (profAlign) {
+        for (let i = 0; i < profAlign.childNodes.length; i++) {
+          const el = profAlign.childNodes[i];
+          if (el.nodeType !== 1) continue;
+          const tag = el.localName || el.nodeName.split(':').pop();
+          if (tag !== 'PVI' && tag !== 'CircCurve' && tag !== 'ParaCurve') continue;
+          const t = textOf(el).split(/\s+/).map(Number);
+          vert.push({
+            type: tag,
+            sta: t[0],
+            elev: t[1],
+            length: el.hasAttribute('length') ? fAttr(el, 'length', null) : null,
+            radius: el.hasAttribute('radius') ? fAttr(el, 'radius', null) : null,
+          });
+        }
+      }
+    }
+
+    return {
+      name, staStart, length,
+      computedEnd: cum,
+      horiz,
+      vertRaw: vert,
+    };
+  }
+
+  // ---------- Dérivation du profil vertical (tangentes + rayons) ----------
+  function buildVerticalElements(vertRaw) {
+    if (!vertRaw || vertRaw.length < 2) return [];
+    const out = [];
+    function grade(a, b) { return (b.elev - a.elev) / (b.sta - a.sta); }
+    let prevPoint = { sta: vertRaw[0].sta, elev: vertRaw[0].elev };
+    for (let i = 1; i < vertRaw.length - 1; i++) {
+      const item = vertRaw[i];
+      const gIn = grade(vertRaw[i - 1], item);
+      const gOut = grade(item, vertRaw[i + 1]);
+      if (item.length != null) {
+        const L = item.length, R = item.radius;
+        const csSta = item.sta - L / 2, csElev = item.elev - gIn * (L / 2);
+        const ceSta = item.sta + L / 2, ceElev = item.elev + gOut * (L / 2);
+        out.push({ type: 'Tangente', kmStart: prevPoint.sta, kmEnd: csSta, length: csSta - prevPoint.sta, grade: gIn });
+        const dg = gOut - gIn;
+        const Kval = dg !== 0 ? Math.abs(L / (dg * 100)) : Infinity;
+        out.push({
+          type: 'RayonVertical', kmStart: csSta, kmEnd: ceSta, length: L, radius: R,
+          gradeIn: gIn, gradeOut: gOut, K: Kval,
+          shape: gIn > gOut ? 'convexe' : (gIn < gOut ? 'concave' : 'plat'),
+          elevAtVertex: item.elev, staVertex: item.sta,
+        });
+        prevPoint = { sta: ceSta, elev: ceElev };
+      } else {
+        out.push({ type: 'Tangente', kmStart: prevPoint.sta, kmEnd: item.sta, length: item.sta - prevPoint.sta, grade: gIn });
+        prevPoint = { sta: item.sta, elev: item.elev };
+      }
+    }
+    const last = vertRaw[vertRaw.length - 1];
+    const gFinal = grade(vertRaw[vertRaw.length - 2], last);
+    out.push({ type: 'Tangente', kmStart: prevPoint.sta, kmEnd: last.sta, length: last.sta - prevPoint.sta, grade: gFinal });
+    return out;
+  }
+
+  // ============================================================
+  // CONTRÔLES DE CONFORMITÉ (VSS / OETV / OCR)
+  // Référence : manuels contexte+techniques, voir reference-technique-routes-vss.md
+  // ============================================================
+
+  function Rmin(Vp, fT, q) { // R = V² / (127 (fT+q))   [V en km/h, q en fraction]
+    return (Vp * Vp) / (127 * (fT + q));
+  }
+  function AminFromR(Vp) { return Vp / 3; } // règle d'usage simplifiée (A_min ≈ R/3 — cf. GC-calculs feuille GéomHoriz)
+  // L_Gmax = 15·Vp (VSS 40 100a, Tab.1, p.2 — confirmé sur le texte normatif ET la table chiffrée officielle ;
+  // la valeur précédente 20·Vp était erronée).
+  function maxAlignLength(Vp) { return 15 * Vp; }
+
+  // ---------- Interpolation linéaire générique sur une table Vp -> valeur (VSS, valeurs officielles) ----------
+  function interpVpTable(table, Vp) {
+    const keys = Object.keys(table).map(Number).sort((a, b) => a - b);
+    if (Vp <= keys[0]) return table[keys[0]];
+    if (Vp >= keys[keys.length - 1]) return table[keys[keys.length - 1]];
+    for (let i = 0; i < keys.length - 1; i++) {
+      const k0 = keys[i], k1 = keys[i + 1];
+      if (Vp >= k0 && Vp <= k1) {
+        const t = (Vp - k0) / (k1 - k0);
+        return table[k0] + t * (table[k1] - table[k0]);
+      }
+    }
+    return table[keys[keys.length - 1]];
+  }
+
+  // VSS 40 110, Tab.1 p.5 — déclivité maximale recommandée, fonction de Vp
+  const I_MAX_TABLE = { 40: 12, 60: 10, 80: 8, 100: 6, 120: 4 };
+  function iMaxNorm(Vp) { return interpVpTable(I_MAX_TABLE, Vp); }
+  const I_MIN_NORM = 0.5; // VSS 40 110 §11 — déclivité minimale recommandée (drainage)
+
+  // VSS 40 110, Tab.2 p.6 — rayons de raccordement verticaux minimaux RECOMMANDÉS (visibilité d'arrêt / confort+phares)
+  const RV_CONVEXE_TABLE = { 40: 1500, 50: 2100, 60: 3000, 70: 4200, 80: 6000, 90: 8500, 100: 12500, 110: 20000 };
+  const RV_CONCAVE_TABLE = { 40: 800, 50: 1200, 60: 1600, 70: 2500, 80: 3500, 90: 4500, 100: 6000, 110: 8000 };
+  function RvMinNorm(Vp, shape) {
+    const table = shape === 'convexe' ? RV_CONVEXE_TABLE : RV_CONCAVE_TABLE;
+    return interpVpTable(table, Vp);
+  }
+
+  function stoppingDistance(VkmH, tr, fL, i) {
+    // d_arrêt S_A = V/3.6 * tr + V² / (254 (fL ± i))  — VSS 40 090b (t=2.0 s confirmé officiellement)
+    // NB : la norme elle-même précise que seules les valeurs des abaques Fig.1/Fig.2 font foi ;
+    // cette formule analytique est qualifiée de « simplifiée » par le texte normatif.
+    return (VkmH / 3.6) * tr + (VkmH * VkmH) / (254 * (fL + i));
+  }
+  function RvMinComfort(VkmH) { // Rv-min = v[m/s]² / 0.8   (feuille DistVisibilité!F32) — critère de confort uniquement
+    const v = VkmH / 3.6;
+    return (v * v) / 0.8;
+  }
+  // S_D disponible dans un raccordement convexe, cas sans dépassement, h0=1.00m hg=0.15m (VSS 40 110, Annexe 1, p.11)
+  function sightDistanceConvex(Rv) { return 2 * Math.sqrt(Math.max(0, Rv)); }
+
+  // ---------- Coefficients de frottement — valeurs usuelles proposées (Tab. 17.7, référence TRAN) ----------
+  // CFL = frottement longitudinal (distance d'arrêt) ; CFT = frottement transversal (R_min, dévers)
+  const CFL_CH_RGD = { 60: 0.49, 80: 0.44, 100: 0.40, 120: 0.36 }; // routes à grand débit (CH)
+  const CFL_CH_AUTRES = { 40: 0.43, 60: 0.35, 80: 0.30 }; // autres routes (CH)
+  const CFL_USA = { 40: 0.38, 60: 0.33, 80: 0.30, 100: 0.29, 120: 0.28 };
+  const CFT_CH = { 40: 0.21, 60: 0.17, 80: 0.14, 100: 0.12, 120: 0.10 };
+  const CFT_USA = { 40: 0.17, 60: 0.15, 80: 0.14, 100: 0.12, 120: 0.09 };
+  function suggestFL(Vp, regime) {
+    const t = regime === 'ch_rgd' ? CFL_CH_RGD : (regime === 'usa' ? CFL_USA : CFL_CH_AUTRES);
+    return interpVpTable(t, Vp);
+  }
+  function suggestFT(Vp, regime) {
+    const t = regime === 'usa' ? CFT_USA : CFT_CH;
+    return interpVpTable(t, Vp);
+  }
+
+  // ---------- Dévers en courbe — formule générale officielle p = 2 + 5·(R_min(Vp,7%)/R) [%] ----------
+  // (confirmée par l'utilisateur — réf. TRAN 23.5 — bornée entre 2% (grand rayon) et 7% (R=R_min))
+  const R_MIN_P7_TABLE = { 40: 45, 50: 75, 60: 120, 70: 175, 80: 240, 90: 320, 100: 420, 110: 525, 120: 650 }; // VSS 40 100a Tab.1
+  function deversCalcule(Vp, R) {
+    if (!(R > 0)) return null;
+    const rmin7 = interpVpTable(R_MIN_P7_TABLE, Vp);
+    const p = 2 + 5 * (rmin7 / R);
+    return Math.max(2, Math.min(7, p));
+  }
+
+  function evaluateHorizontal(horiz, params) {
+    const Vp = params.Vp || 80;
+    const fTRegime = params.fTRegime || 'ch';
+    const fT = params.fT != null ? params.fT : suggestFT(Vp, fTRegime);
+    const qUsual = params.q != null ? params.q : 0.07; // q_design — dévers maximal de calcul (7%), utilisé pour R_min uniquement
+    const rMin = Rmin(Vp, fT, qUsual);
+    const lMax = maxAlignLength(Vp);
+
+    return horiz.map((el, idx) => {
+      const checks = [];
+      if (el.type === 'Curve' && el.radius) {
+        checks.push({
+          label: `R ≥ R_min(${Vp} km/h)`,
+          value: el.radius, threshold: rMin,
+          ok: el.radius >= rMin,
+          detail: `R = ${el.radius.toFixed(1)} m vs R_min = ${rMin.toFixed(1)} m (f_T=${fT}, q_design=${(qUsual * 100).toFixed(0)}%)`,
+        });
+        // Dévers calculé pour CE rayon (formule générale p=2+5·Rmin7%/R) — valeur informative, pas un contrôle pass/fail
+        const pDevers = deversCalcule(Vp, el.radius);
+        if (pDevers != null) {
+          checks.push({
+            label: `Dévers calculé p(R)`,
+            value: pDevers, threshold: null,
+            ok: true, severity: 'info',
+            detail: `p = 2 + 5·R_min(${Vp})/R = ${pDevers.toFixed(2)} % (R=${el.radius.toFixed(1)} m)`,
+          });
+        }
+      }
+      if (el.type === 'Spiral' && el.A != null) {
+        const Rfin = isFinite(el.radiusStart) ? el.radiusStart : el.radiusEnd;
+        if (Rfin) {
+          // VSS 40 100a §6, p.3 : domaine R/3 ≤ A ≤ R (deux conditions explicites et distinctes de la norme)
+          const AminGuide = Rfin / 3;
+          const AmaxGuide = Rfin;
+          checks.push({
+            label: 'A ≥ R/3 (perceptibilité du virage)',
+            value: el.A, threshold: AminGuide,
+            ok: el.A >= AminGuide,
+            detail: `A = ${el.A.toFixed(1)} m vs A_min = ${AminGuide.toFixed(1)} m (R=${Rfin.toFixed(1)} m)`,
+          });
+          checks.push({
+            label: 'A ≤ R (perceptibilité de la clothoïde)',
+            value: el.A, threshold: AmaxGuide,
+            ok: el.A <= AmaxGuide,
+            detail: `A = ${el.A.toFixed(1)} m vs A_max = R = ${AmaxGuide.toFixed(1)} m`,
+          });
+        }
+      }
+      if (el.type === 'Line') {
+        checks.push({
+          label: `L ≤ L_Gmax = 15·V_p (VSS 40 100a Tab.1)`,
+          value: el.length, threshold: lMax,
+          ok: el.length <= lMax,
+          detail: `L = ${el.length.toFixed(1)} m vs L_Gmax = ${lMax.toFixed(1)} m`,
+          severity: 'info', // dépassement fréquent et pas toujours critique
+        });
+      }
+      const blocking = checks.filter(c => c.severity !== 'info');
+      const status = checks.length === 0 ? 'info' : (blocking.length === 0 ? 'info' : (blocking.every(c => c.ok) ? 'ok' : 'fail'));
+      return Object.assign({}, el, { idx, checks, status });
+    });
+  }
+
+  function evaluateSConsecutiveClothoids(horizEvaluated) {
+    // Clothoïde en S : deux clothoïdes STRICTEMENT adjacentes (pas d'arc/alignement entre elles),
+    // de sens de rotation opposé (point d'inflexion). Règle : 0.6667 <= A1/A2 <= 1.5
+    const notes = [];
+    for (let i = 0; i < horizEvaluated.length - 1; i++) {
+      const a = horizEvaluated[i], b = horizEvaluated[i + 1];
+      if (a.type === 'Spiral' && b.type === 'Spiral' && a.A && b.A && a.rot !== b.rot) {
+        const ratio = a.A / b.A;
+        const ok = ratio >= 0.6667 && ratio <= 1.5;
+        notes.push({
+          idxA: a.idx, idxB: b.idx, ratio, ok,
+          detail: `A1/A2 = ${ratio.toFixed(3)} (A1=${a.A.toFixed(1)}, A2=${b.A.toFixed(1)}) — borne [0.6667 ; 1.5]`,
+        });
+      }
+    }
+    return notes;
+  }
+
+  function evaluateVertical(vertElements, params) {
+    const Vp = params.Vp || 80;
+    const rvMinComf = RvMinComfort(Vp);
+    const iMax = iMaxNorm(Vp);
+    // f_L proposé depuis la table officielle (Tab. 17.7) par défaut, substituable par l'utilisateur
+    const fLRegime = params.fLRegime || 'ch_autres';
+    const fL = params.fL != null ? params.fL : suggestFL(Vp, fLRegime);
+    const tr = params.tr != null ? params.tr : 2.0; // VSS 40 090b — confirmé officiellement
+    return vertElements.map((el, idx) => {
+      const checks = [];
+      if (el.type === 'RayonVertical') {
+        // Retour utilisateur : les valeurs du Tab.2 VSS 40 110 sont des OPTIMUMS indicatifs, pas des valeurs
+        // limites. Le contrôle pratique réel se fait via la visibilité d'arrêt (S_D vs S_A) et le confort
+        // dynamique — ce sont ces deux critères qui sont bloquants ; le Tab.2 reste affiché à titre de référence.
+        const rvMinNorm = RvMinNorm(Vp, el.shape);
+        checks.push({
+          label: `Rv ≥ Rv-min optimum ${el.shape} (${Vp} km/h, VSS 40 110 Tab.2 — valeur indicative)`,
+          value: el.radius, threshold: rvMinNorm,
+          ok: el.radius >= rvMinNorm,
+          detail: `Rv = ${el.radius.toFixed(1)} m vs Rv-min optimum = ${rvMinNorm.toFixed(1)} m (${el.shape}) — valeur recommandée, pas une limite`,
+          severity: 'info',
+        });
+        // Critère de confort dynamique — BLOQUANT (contrôle pratique de référence)
+        checks.push({
+          label: `Rv ≥ Rv-min confort(${Vp} km/h)`,
+          value: el.radius, threshold: rvMinComf,
+          ok: el.radius >= rvMinComf,
+          detail: `Rv = ${el.radius.toFixed(1)} m vs Rv-min confort = ${rvMinComf.toFixed(1)} m`,
+        });
+        // S_A : visibilité disponible (raccordement convexe, cas sans dépassement) vs distance d'arrêt requise — BLOQUANT
+        if (el.shape === 'convexe') {
+          const sD = sightDistanceConvex(el.radius);
+          const iMoy = ((el.gradeIn || 0) + (el.gradeOut || 0)) / 2;
+          const sA = stoppingDistance(Vp, tr, fL, iMoy);
+          checks.push({
+            label: `S_D ≥ S_A (visibilité d'arrêt, VSS 40 090b/40 110)`,
+            value: sD, threshold: sA,
+            ok: sD >= sA,
+            detail: `S_D ≈ 2√Rv = ${sD.toFixed(1)} m vs S_A ≈ ${sA.toFixed(1)} m (t=${tr}s, f_L=${fL.toFixed(2)} [${fLRegime}]) — seuls les abaques officiels VSS 40 090b font foi en cas de litige`,
+          });
+        }
+      }
+      if (el.type === 'Tangente') {
+        const absI = Math.abs(el.grade) * 100;
+        checks.push({
+          label: `Déclivité ≤ i_max(${Vp} km/h) = ${iMax.toFixed(1)}% (VSS 40 110 Tab.1)`,
+          value: absI, threshold: iMax,
+          ok: absI <= iMax,
+          detail: `i = ${(el.grade * 100).toFixed(2)} % vs i_max = ${iMax.toFixed(1)} %`,
+        });
+        checks.push({
+          label: `Déclivité ≥ i_min = ${I_MIN_NORM}% (drainage, VSS 40 110 §11)`,
+          value: absI, threshold: I_MIN_NORM,
+          ok: absI >= I_MIN_NORM,
+          detail: `i = ${(el.grade * 100).toFixed(2)} % vs i_min = ${I_MIN_NORM} % (recommandation, pas une valeur limite)`,
+          severity: 'info',
+        });
+      }
+      const blocking = checks.filter(c => c.severity !== 'info');
+      const status = checks.length === 0 ? 'info' : (blocking.length === 0 ? 'info' : (blocking.every(c => c.ok) ? 'ok' : 'fail'));
+      return Object.assign({}, el, { idx, checks, status });
+    });
+  }
+
+  // ---------- Module gabarit / balayage (manuel "techniques") ----------
+  const NORMALIZED_VEHICLES = {
+    VL: { label: 'Voiture légère (VSS)', L: 1.90, E: 3.00, Pa: 0.90, voie: 1.80, longueur: 5.10, rayonBraquage: 6.50 },
+    Bus12: { label: 'Bus 12 m', L: 2.50, E: 6.08, Pa: 2.30, voie: 2.00, longueur: 12.00, rayonBraquage: 9.50 },
+    Bus15: { label: 'Bus 15 m', L: 2.50, E: 6.08, Pa: 2.30, voie: 2.40, longueur: 15.00, rayonBraquage: 8.40 },
+    Camion1: { label: 'Camion 1', L: 2.60, E: 5.00, Pa: 1.50, voie: 2.50, longueur: 9.40, rayonBraquage: 7.50 },
+    Camion2: { label: 'Camion 2', L: 2.60, E: 5.00, Pa: 1.80, voie: 2.50, longueur: 11.00, rayonBraquage: 10.00 },
+  };
+
+  function swept(R, E, L, Pa) {
+    const domainOk = (R * R) > (E * E + (L * L) / 4);
+    if (!domainOk) return { domainOk };
+    const Ri = Math.sqrt(R * R - E * E - (L * L) / 4);
+    const Re = Math.sqrt(Math.pow(R + L / 2, 2) + Math.pow(E + Pa, 2));
+    return { domainOk, Ri, Re, B: Re - Ri };
+  }
+
+  function checkOETVring(Re2, Ri2) {
+    // anneau: De <= 25.00, Di >= 10.60 (diamètres)
+    const De = 2 * Re2, Di = 2 * Ri2;
+    return { De, Di, ok: De <= 25.00 && Di >= 10.60 };
+  }
+
+  // ============================================================
+  // VSS 40 105b — Surlargeur en courbe (module distinct de l'anneau OETV ci-dessus,
+  // applicable à TOUTE courbe courante du tracé, pas seulement aux manœuvres à faible rayon)
+  // ============================================================
+  const SURLARGEUR_CATEGORIES = {
+    A: { label: 'A — Semi-remorque / camion+remorque / autocar / bus articulé', D: 10.0 },
+    B: { label: 'B — Camion 3-4 essieux(+remorque) / bus standard / car', D: 8.7 },
+    C: { label: 'C — Camion et grand véhicule de livraison (≤ 6,5 t)', D: 6.7 },
+    D: { label: 'D — Voiture particulière / petit véhicule (≤ 3,5 t)', D: 4.0 },
+  };
+
+  // e = Ra - sqrt(Ra² - D²)  — surlargeur maximale par voie (VSS 40 105b §6, p.8)
+  function surlargeurMax(Ra, D) {
+    if (!(Ra > D)) return null; // domaine non valide (Ra doit être > D)
+    return Ra - Math.sqrt(Ra * Ra - D * D);
+  }
+
+  // Évalue la surlargeur déterminante pour une courbe du tracé en plan.
+  // Ra [m] rayon extérieur de la voie élargie ; phiTotalGon [gon] angle total du virage (delta, converti) ; catKey catégorie A-D.
+  function evaluateSurlargeur(Ra, phiTotalGon, catKey) {
+    const cat = SURLARGEUR_CATEGORIES[catKey] || SURLARGEUR_CATEGORIES.B;
+    const D = cat.D;
+    if (!(Ra >= 11.25 && Ra <= 500)) {
+      return { applicable: false, reason: `Hors domaine de validité de la norme (Ra doit être entre 11,25 m et 500 m ; Ra=${Ra.toFixed(1)} m)`, category: cat };
+    }
+    const e = surlargeurMax(Ra, D);
+    if (e === null) return { applicable: false, reason: 'Ra ≤ D — géométrie incompatible avec le véhicule déterminant', category: cat };
+    // Phi_Grenz = 5.5 * arcsin(D/Ra), en grades (D/Ra en radians -> *200/pi pour convertir en gon)
+    const phiGrenz = 5.5 * Math.asin(Math.min(1, D / Ra)) * (200 / Math.PI);
+    const needsFullWidth = phiTotalGon == null || phiTotalGon >= phiGrenz;
+    // Abaque p (facteur de réduction) non digitalisé ici : on applique e intégral si phi>=phiGrenz,
+    // et un indicatif "réduction possible" sinon (p<100%, valeur exacte à lire sur l'abaque officiel Fig.4).
+    const eEff = needsFullWidth ? e : null;
+    const dispense = e <= 0.10; // VSS 40 105b §8.5 : pas de surlargeur si e' ≤ 0,10 m/voie
+    return {
+      applicable: true,
+      category: cat, D, Ra, e, phiGrenz, phiTotalGon,
+      needsFullWidth, eEff, dispense,
+      detail: dispense
+        ? `e = ${e.toFixed(3)} m ≤ 0,10 m → surlargeur non requise (VSS 40 105b §8.5)`
+        : (needsFullWidth
+          ? `e = ${e.toFixed(3)} m (angle total ${phiTotalGon != null ? phiTotalGon.toFixed(1) : '?'} gon ≥ Φ_Grenz=${phiGrenz.toFixed(1)} gon → surlargeur intégrale)`
+          : `e_max = ${e.toFixed(3)} m, mais angle total < Φ_Grenz=${phiGrenz.toFixed(1)} gon → réduction par facteur p possible (abaque Fig.4, non digitalisé ici — valeur indicative = e_max)`),
+    };
+  }
+
+  // ============================================================
+  // ÉCHANTILLONNAGE GÉOMÉTRIQUE (pour tracé plan SVG/DXF)
+  // Convention azimut : θ mesuré depuis le Nord, sens horaire.
+  // Vecteur direction en (E,N) : dE = sin(θ), dN = cos(θ)
+  // ============================================================
+
+  function dist2(a, b) {
+    const dE = a.E - b.E, dN = a.N - b.N;
+    return Math.sqrt(dE * dE + dN * dN);
+  }
+
+  function sampleLine(el) {
+    return [el.start, el.end];
+  }
+
+  function sampleCurve(el, nSeg) {
+    nSeg = nSeg || Math.max(8, Math.round((el.delta || 0.3) * 24));
+    const R = el.radius, C = el.center;
+    const angle0 = Math.atan2(el.start.E - C.E, el.start.N - C.N);
+    const delta = Math.abs(el.delta || 0);
+    const candidates = [angle0 + delta, angle0 - delta];
+    let best = null, bestErr = Infinity;
+    for (const angle1 of candidates) {
+      const endCand = { E: C.E + R * Math.sin(angle1), N: C.N + R * Math.cos(angle1) };
+      const err = dist2(endCand, el.end);
+      if (err < bestErr) { bestErr = err; best = angle1; }
+    }
+    const pts = [];
+    for (let i = 0; i <= nSeg; i++) {
+      const a = angle0 + (best - angle0) * (i / nSeg);
+      pts.push({ E: C.E + R * Math.sin(a), N: C.N + R * Math.cos(a) });
+    }
+    return pts;
+  }
+
+  function sampleSpiral(el, nSeg) {
+    nSeg = nSeg || Math.max(40, Math.round(el.length));
+    const L = el.length;
+    const k0 = isFinite(el.radiusStart) ? 1 / el.radiusStart : 0;
+    const k1 = isFinite(el.radiusEnd) ? 1 / el.radiusEnd : 0;
+
+    function integrate(sign) {
+      // Convention LandXML vérifiée empiriquement : dir = atan2(dN, dE) (E=x, N=y, math standard)
+      const pts = [{ E: el.start.E, N: el.start.N }];
+      let theta = el.dirStart;
+      let E = el.start.E, N = el.start.N;
+      const ds = L / nSeg;
+      for (let i = 1; i <= nSeg; i++) {
+        const s = i * ds;
+        const k = k0 + (k1 - k0) * (s / L);
+        theta += sign * k * ds;
+        E += Math.cos(theta) * ds;
+        N += Math.sin(theta) * ds;
+        pts.push({ E, N });
+      }
+      return pts;
+    }
+    const candA = integrate(1), candB = integrate(-1);
+    const errA = dist2(candA[candA.length - 1], el.end);
+    const errB = dist2(candB[candB.length - 1], el.end);
+    return errA <= errB ? candA : candB;
+  }
+
+  function sampleElement(el) {
+    if (el.type === 'Line') return sampleLine(el);
+    if (el.type === 'Curve') return sampleCurve(el);
+    if (el.type === 'Spiral') return sampleSpiral(el);
+    return [];
+  }
+
+  // ---------- Libellés français des types d'éléments (affichage uniquement — les valeurs
+  // internes 'Line'/'Curve'/'Spiral'/'Tangente'/'RayonVertical' restent inchangées en interne,
+  // issues du vocabulaire LandXML / utilisées pour les comparaisons de type dans le code) ----------
+  const TYPE_LABELS_FR = {
+    Line: 'Alignement droit',
+    Curve: 'Courbe circulaire',
+    Spiral: 'Clothoïde',
+    Tangente: 'Tangente',
+    RayonVertical: 'Raccordement vertical',
+  };
+  function typeLabelFR(type) { return TYPE_LABELS_FR[type] || type; }
+
+  return {
+    parseLandXML, buildVerticalElements,
+    evaluateHorizontal, evaluateVertical, evaluateSConsecutiveClothoids,
+    Rmin, maxAlignLength, stoppingDistance, RvMinComfort,
+    iMaxNorm, I_MIN_NORM, RvMinNorm, sightDistanceConvex, interpVpTable,
+    suggestFL, suggestFT, deversCalcule, R_MIN_P7_TABLE,
+    CFL_CH_RGD, CFL_CH_AUTRES, CFL_USA, CFT_CH, CFT_USA,
+    NORMALIZED_VEHICLES, swept, checkOETVring,
+    SURLARGEUR_CATEGORIES, surlargeurMax, evaluateSurlargeur,
+    sampleElement, sampleLine, sampleCurve, sampleSpiral, dist2,
+    TYPE_LABELS_FR, typeLabelFR,
+  };
+});
+
+
+/* ============================================================
+   AppCore — modèle, Excel-data, Rapport HTML, DXF (inline, identique à app-core.js)
+   ============================================================ */
+/* ============================================================
+   Logique applicative pure (sans DOM) — construction du modèle,
+   génération Excel (data), DXF (texte) et Rapport (HTML).
+   Testable en Node (ne dépend que de RoadEngine).
+   ============================================================ */
+
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) {
+    module.exports = factory(require('./engine.js'));
+  } else {
+    root.AppCore = factory(root.RoadEngine);
+  }
+})(typeof self !== 'undefined' ? self : this, function (RoadEngine) {
+  'use strict';
+
+  const VEHICLES = RoadEngine.NORMALIZED_VEHICLES;
+
+  // ---------- Reconstruction du profil en long (points pour tracé) ----------
+  function buildProfileSegments(vertRaw, vertElements) {
+    if (!vertRaw || vertRaw.length < 2) return [];
+    const segs = [];
+    let elev = vertRaw[0].elev;
+    for (const el of vertElements) {
+      if (el.type === 'Tangente') {
+        const elevEnd = elev + el.grade * (el.kmEnd - el.kmStart);
+        segs.push({
+          type: 'Tangente', status: el.status, checks: el.checks,
+          pts: [{ sta: el.kmStart, elev: elev }, { sta: el.kmEnd, elev: elevEnd }],
+          kmStart: el.kmStart, kmEnd: el.kmEnd,
+        });
+        elev = elevEnd;
+      } else if (el.type === 'RayonVertical') {
+        const L = el.length, gIn = el.gradeIn, gOut = el.gradeOut;
+        const pts = [];
+        const n = 12;
+        for (let i = 0; i <= n; i++) {
+          const s = el.kmStart + (L * i) / n;
+          const ds = s - el.kmStart;
+          const e = elev + gIn * ds + ((gOut - gIn) / (2 * L)) * ds * ds;
+          pts.push({ sta: s, elev: e });
+        }
+        segs.push({
+          type: 'RayonVertical', status: el.status, checks: el.checks,
+          pts, kmStart: el.kmStart, kmEnd: el.kmEnd, radius: el.radius, shape: el.shape,
+        });
+        elev = pts[pts.length - 1].elev;
+      }
+    }
+    return segs;
+  }
+
+  // ---------- Construction du modèle complet pour un alignement ----------
+  function buildModel(alignment, params) {
+    const Vp = params.Vp || 80;
+    const fTRegime = params.fTRegime || 'ch';
+    const fLRegime = params.fLRegime || 'ch_autres';
+    const fT = params.fT != null ? params.fT : RoadEngine.suggestFT(Vp, fTRegime);
+    const fL = params.fL != null ? params.fL : RoadEngine.suggestFL(Vp, fLRegime);
+    const q = params.q != null ? params.q : 0.07; // q_design — dévers max de calcul (7%), pour R_min uniquement
+    const tr = params.tr != null ? params.tr : 2.0;
+    const vehicleKey = params.vehicleKey || 'Bus12';
+    const vehicle = VEHICLES[vehicleKey] || VEHICLES.Bus12;
+
+    const horizEval = RoadEngine.evaluateHorizontal(alignment.horiz, { Vp, fT, fTRegime, q });
+    const sConsecutive = RoadEngine.evaluateSConsecutiveClothoids(horizEval);
+
+    // échantillonnage pour tracé plan + attache du statut à chaque segment
+    const planSegments = horizEval.map(el => {
+      let pts = [];
+      try { pts = RoadEngine.sampleElement(el); } catch (e) { pts = []; }
+      return { type: el.type, status: el.status, checks: el.checks, pts, idx: el.idx, kmStart: el.kmStart, kmEnd: el.kmEnd };
+    });
+
+    // gabarit / giration : pour chaque Curve, calcul du balayage véhicule.
+    // L'anneau OETV (De<=25.00m, Di>=10.60m — art.40 OETV) ne s'applique qu'aux
+    // manoeuvres de girations à faible rayon (carrefours, raquettes, débouchés),
+    // PAS aux courbes courantes d'un tracé d'axe (R=80..600m) : on ne l'applique
+    // donc que sous un seuil de rayon paramétrable (giroRadiusThreshold, def. 30m).
+    // Au-delà, seul le calcul de surlargeur de balayage B est fourni, à titre
+    // informatif (la largeur de chaussée réelle n'est pas dans le LandXML).
+    const giroThreshold = params.giroRadiusThreshold != null ? params.giroRadiusThreshold : 30;
+    const gabaritResults = [];
+    for (const el of horizEval) {
+      if (el.type === 'Curve' && el.radius) {
+        const sw = RoadEngine.swept(el.radius, vehicle.E, vehicle.L, vehicle.Pa);
+        const isGiration = el.radius <= giroThreshold;
+        let oetv = null;
+        if (isGiration && sw.domainOk) oetv = RoadEngine.checkOETVring(sw.Re, sw.Ri);
+        let status;
+        if (isGiration) status = !sw.domainOk ? 'fail' : (oetv ? (oetv.ok ? 'ok' : 'fail') : 'info');
+        else status = 'info';
+        gabaritResults.push({
+          idx: el.idx, kmStart: el.kmStart, kmEnd: el.kmEnd, radius: el.radius,
+          vehicleKey, vehicleLabel: vehicle.label, isGiration,
+          domainOk: sw.domainOk, Ri: sw.Ri, Re: sw.Re, B: sw.B,
+          oetv, status,
+        });
+      }
+    }
+
+    let vertElements = [];
+    let profileSegments = [];
+    if (alignment.vertRaw && alignment.vertRaw.length >= 2) {
+      vertElements = RoadEngine.evaluateVertical(RoadEngine.buildVerticalElements(alignment.vertRaw), { Vp, fL, fLRegime, tr });
+      profileSegments = buildProfileSegments(alignment.vertRaw, vertElements);
+    }
+
+    // ---------- Surlargeur en courbe (VSS 40 105b) — distinct de l'anneau OETV ci-dessus ----------
+    // NB : Ra (rayon extérieur de la voie élargie) est approximé par le rayon de l'axe, faute de largeur
+    // de chaussée réelle dans le LandXML — à affiner si cette donnée devient disponible. Phi (angle total
+    // du virage, y c. clothoïdes) est approximé par |delta| de l'arc circulaire seul (clothoïdes amont/aval
+    // non cumulées ici), ce qui est prudent (sous-estime légèrement Phi, donc jamais côté non-sécuritaire
+    // pour la dispense de surlargeur — seulement pour le facteur de réduction p indicatif).
+    const surlargeurCatKey = params.surlargeurCatKey || 'B';
+    const surlargeurResults = [];
+    for (const el of horizEval) {
+      if (el.type === 'Curve' && el.radius) {
+        const phiTotalGon = el.delta != null ? Math.abs(el.delta) * (200 / Math.PI) : null;
+        const res = RoadEngine.evaluateSurlargeur(el.radius, phiTotalGon, surlargeurCatKey);
+        // Statut informatif : ce module donne une largeur à CONSTRUIRE, ce n'est pas un contrôle de conformité
+        // du tracé (une courbe serrée n'est pas "non conforme" — elle requiert une surlargeur). 'ok' = aucune
+        // surlargeur nécessaire (dispense), 'info' = surlargeur requise (valeur donnée) ou hors domaine.
+        surlargeurResults.push(Object.assign({ idx: el.idx, kmStart: el.kmStart, kmEnd: el.kmEnd, radius: el.radius }, res,
+          { status: !res.applicable ? 'info' : (res.dispense ? 'ok' : 'info') }));
+      }
+    }
+
+    // synthèse
+    function countStatus(list) {
+      const c = { ok: 0, fail: 0, info: 0 };
+      list.forEach(x => { c[x.status] = (c[x.status] || 0) + 1; });
+      return c;
+    }
+    const synth = {
+      horiz: countStatus(horizEval),
+      vert: countStatus(vertElements),
+      gabarit: countStatus(gabaritResults),
+      surlargeur: countStatus(surlargeurResults),
+      sConsecutiveNC: sConsecutive.filter(s => !s.ok).length,
+    };
+
+    return {
+      name: alignment.name, staStart: alignment.staStart, length: alignment.length,
+      computedEnd: alignment.computedEnd,
+      params: { Vp, fT, fTRegime, fL, fLRegime, q, tr, vehicleKey, vehicleLabel: vehicle.label, surlargeurCatKey,
+        surlargeurCatLabel: (RoadEngine.SURLARGEUR_CATEGORIES[surlargeurCatKey] || RoadEngine.SURLARGEUR_CATEGORIES.B).label },
+      horizEval, sConsecutive, planSegments,
+      gabaritResults, vertElements, profileSegments,
+      surlargeurResults,
+      synth,
+    };
+  }
+
+  // ---------- Export Excel (données pures — sheet name + rows) ----------
+  function buildWorkbookData(model) {
+    const sheets = [];
+
+    const synthRows = [
+      ['Axe', model.name],
+      ['Vitesse projet Vp (km/h)', model.params.Vp],
+      ['f_T — frottement transversal (R_min)', model.params.fT, 'référentiel: ' + model.params.fTRegime],
+      ['f_L — frottement longitudinal (S_A)', model.params.fL, 'référentiel: ' + model.params.fLRegime],
+      ['q_design (dévers max de calcul)', (model.params.q * 100).toFixed(0) + ' %'],
+      ['t (temps de réaction, VSS 40 090b)', model.params.tr + ' s'],
+      ['Véhicule normalisé (gabarit)', model.params.vehicleLabel],
+      [],
+      ['Contrôle', 'Conforme', 'Non conforme', 'Info'],
+      ['Géométrie horizontale', model.synth.horiz.ok || 0, model.synth.horiz.fail || 0, model.synth.horiz.info || 0],
+      ['Géométrie verticale', model.synth.vert.ok || 0, model.synth.vert.fail || 0, model.synth.vert.info || 0],
+      ['Gabarit / giration', model.synth.gabarit.ok || 0, model.synth.gabarit.fail || 0, model.synth.gabarit.info || 0],
+      ['Surlargeur en courbe (VSS 40 105b) — dispensées', model.synth.surlargeur ? (model.synth.surlargeur.ok || 0) : 0, '', model.synth.surlargeur ? (model.synth.surlargeur.info || 0) : 0],
+      ['Clothoïdes en S non conformes', model.synth.sConsecutiveNC, '', ''],
+    ];
+    sheets.push({ name: 'Synthèse', rows: synthRows });
+
+    function findCheck(el, labelSubstr) { return (el.checks || []).find(c => c.label && c.label.indexOf(labelSubstr) >= 0); }
+
+    const hRows = [['#', 'Type', 'Chaînage début', 'Chaînage fin', 'Longueur (m)', 'Rayon / A (m)', 'Seuil (m)', 'Dévers calculé (%)', 'Statut', 'Détail']];
+    model.horizEval.forEach(el => {
+      const chk = el.checks && el.checks[0];
+      const devers = findCheck(el, 'Dévers calculé');
+      hRows.push([
+        el.idx, RoadEngine.typeLabelFR(el.type), +el.kmStart.toFixed(2), +el.kmEnd.toFixed(2), +el.length.toFixed(2),
+        el.radius != null ? +el.radius.toFixed(2) : (el.A != null ? +el.A.toFixed(2) : ''),
+        chk ? +Number(chk.threshold).toFixed(2) : '',
+        devers ? +Number(devers.value).toFixed(2) : '',
+        el.status === 'ok' ? 'Conforme' : (el.status === 'fail' ? 'NON CONFORME' : 'Info'),
+        chk ? chk.detail : '',
+      ]);
+    });
+    sheets.push({ name: 'Horizontal', rows: hRows });
+
+    if (model.vertElements.length) {
+      const vRows = [['#', 'Type', 'Chaînage début', 'Chaînage fin', 'Longueur (m)', 'Rv (m) / i (%)', 'Seuil', 'Statut', 'Détail']];
+      model.vertElements.forEach(el => {
+        const chk = el.checks && el.checks[0];
+        vRows.push([
+          el.idx, RoadEngine.typeLabelFR(el.type), +el.kmStart.toFixed(2), +el.kmEnd.toFixed(2), +el.length.toFixed(2),
+          el.radius != null ? +el.radius.toFixed(1) : (el.grade != null ? +(el.grade * 100).toFixed(2) : ''),
+          chk ? +Number(chk.threshold).toFixed(2) : '',
+          el.status === 'ok' ? 'Conforme' : (el.status === 'fail' ? 'NON CONFORME' : 'Info'),
+          chk ? chk.detail : '',
+        ]);
+      });
+      sheets.push({ name: 'Vertical', rows: vRows });
+    }
+
+    const gRows = [['#', 'Chaînage', 'Rayon (m)', 'Giration (R≤seuil) ?', 'Véhicule', 'Ri (m)', 'Re (m)', 'Largeur balayée B (m)', 'De anneau (m)', 'Di anneau (m)', 'Statut']];
+    model.gabaritResults.forEach(g => {
+      gRows.push([
+        g.idx, +g.kmStart.toFixed(2), +g.radius.toFixed(2), g.isGiration ? 'Oui' : 'Non (courant)', g.vehicleLabel,
+        g.Ri != null ? +g.Ri.toFixed(2) : 'hors domaine',
+        g.Re != null ? +g.Re.toFixed(2) : 'hors domaine',
+        g.B != null ? +g.B.toFixed(2) : '',
+        g.oetv ? +g.oetv.De.toFixed(2) : '',
+        g.oetv ? +g.oetv.Di.toFixed(2) : '',
+        g.status === 'ok' ? 'Conforme' : (g.status === 'fail' ? 'NON CONFORME' : (g.isGiration ? 'Info' : 'Info (surlargeur indicative)')),
+      ]);
+    });
+    sheets.push({ name: 'Gabarit', rows: gRows });
+
+    const sRows = [['Spiral #A', 'Spiral #B', 'A1/A2', 'Statut', 'Détail']];
+    model.sConsecutive.forEach(s => {
+      sRows.push([s.idxA, s.idxB, +s.ratio.toFixed(3), s.ok ? 'Conforme' : 'NON CONFORME', s.detail]);
+    });
+    if (model.sConsecutive.length) sheets.push({ name: 'Clothoïdes-S', rows: sRows });
+
+    if (model.surlargeurResults && model.surlargeurResults.length) {
+      const slRows = [['#', 'Chaînage', 'Rayon Ra≈axe (m)', 'Catégorie', 'D (m)', 'e max (m)', 'Φ_Grenz (gon)', 'Dispensée ?', 'Détail']];
+      model.surlargeurResults.forEach(s => {
+        slRows.push([
+          s.idx, +s.kmStart.toFixed(2), +s.radius.toFixed(2),
+          s.category ? s.category.label : '', s.D != null ? s.D : '',
+          s.e != null ? +s.e.toFixed(3) : '', s.phiGrenz != null ? +s.phiGrenz.toFixed(1) : '',
+          s.applicable ? (s.dispense ? 'Oui' : 'Non') : 'Hors domaine',
+          s.applicable ? s.detail : s.reason,
+        ]);
+      });
+      sheets.push({ name: 'Surlargeur', rows: slRows });
+    }
+
+    return sheets;
+  }
+
+  // ---------- Export Rapport (HTML autonome) ----------
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function statusBadge(status) {
+    const map = { ok: ['Conforme', '#1a7f37', '#e6f4ea'], fail: ['NON CONFORME', '#b42318', '#fde8e8'], info: ['Info', '#555', '#eee'] };
+    const [label, fg, bg] = map[status] || map.info;
+    return `<span style="color:${fg};background:${bg};padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;">${label}</span>`;
+  }
+
+  function buildReportHTML(model) {
+    const now = new Date().toISOString().slice(0, 10);
+    function tableRows(rows) { return rows.map(r => `<tr>${r.map(c => `<td style="padding:4px 8px;border-bottom:1px solid #e5e5e5;">${c}</td>`).join('')}</tr>`).join(''); }
+
+    function findCheckR(el, labelSubstr) { return (el.checks || []).find(c => c.label && c.label.indexOf(labelSubstr) >= 0); }
+    const hRows = model.horizEval.map(el => {
+      const chk = el.checks && el.checks[0];
+      const devers = findCheckR(el, 'Dévers calculé');
+      return [el.idx, RoadEngine.typeLabelFR(el.type), el.kmStart.toFixed(2), el.kmEnd.toFixed(2),
+        el.radius != null ? el.radius.toFixed(1) : (el.A != null ? 'A=' + el.A.toFixed(1) : '—'),
+        devers ? Number(devers.value).toFixed(2) + ' %' : '—',
+        statusBadge(el.status), esc(chk ? chk.detail : '')];
+    });
+    const vRows = model.vertElements.map(el => {
+      const chk = el.checks && el.checks[0];
+      return [el.idx, RoadEngine.typeLabelFR(el.type), el.kmStart.toFixed(2), el.kmEnd.toFixed(2),
+        el.radius != null ? el.radius.toFixed(0) : (el.grade != null ? (el.grade * 100).toFixed(2) + '%' : '—'),
+        statusBadge(el.status), esc(chk ? chk.detail : '')];
+    });
+    const gRows = model.gabaritResults.map(g => [
+      g.idx, g.kmStart.toFixed(2), g.radius.toFixed(1), g.isGiration ? 'Oui' : 'Non', esc(g.vehicleLabel),
+      g.B != null ? g.B.toFixed(2) : '—', statusBadge(g.status),
+    ]);
+    const slRows = (model.surlargeurResults || []).map(s => [
+      s.idx, s.kmStart.toFixed(2), s.radius.toFixed(1),
+      s.applicable ? (s.e != null ? s.e.toFixed(3) + ' m' : '—') : '—',
+      statusBadge(s.status), esc(s.applicable ? s.detail : s.reason),
+    ]);
+
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Rapport — Axe ${esc(model.name)}</title>
+<style>
+body{font-family:Arial,Helvetica,sans-serif;color:#222;max-width:900px;margin:30px auto;padding:0 20px;}
+h1{font-size:22px;border-bottom:3px solid #1a3c6e;padding-bottom:8px;}
+h2{font-size:17px;color:#1a3c6e;margin-top:28px;}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+th{background:#1a3c6e;color:#fff;text-align:left;padding:6px 8px;}
+.meta{color:#555;font-size:13px;}
+.summary{display:flex;gap:16px;margin:12px 0;flex-wrap:wrap;}
+.card{border:1px solid #ddd;border-radius:8px;padding:10px 14px;min-width:160px;}
+.card b{font-size:20px;display:block;}
+footer{margin-top:40px;font-size:11px;color:#888;border-top:1px solid #eee;padding-top:8px;}
+</style></head><body>
+<h1>Rapport de contrôle géométrique — Axe « ${esc(model.name)} »</h1>
+<p class="meta">Généré le ${now} · Vp = ${model.params.Vp} km/h · f_T = ${model.params.fT} (réf. ${esc(model.params.fTRegime)}) · f_L = ${model.params.fL} (réf. ${esc(model.params.fLRegime)}) · q_design = ${(model.params.q*100).toFixed(0)}% · t = ${model.params.tr} s · Véhicule gabarit : ${esc(model.params.vehicleLabel)} · Catégorie surlargeur : ${esc(model.params.surlargeurCatLabel || '')}<br>
+Référentiel : normes suisses VSS (40 090b, 40 100a, 40 105b, 40 110), OETV (art. 40 — anneau de giration), OCR (art. 64–66 — dimensions véhicules).</p>
+
+<h2>Synthèse</h2>
+<div class="summary">
+ <div class="card">Horizontal<br><b>${model.synth.horiz.ok||0} / ${(model.synth.horiz.ok||0)+(model.synth.horiz.fail||0)}</b>conformes</div>
+ <div class="card">Vertical<br><b>${model.synth.vert.ok||0} / ${(model.synth.vert.ok||0)+(model.synth.vert.fail||0)}</b>conformes</div>
+ <div class="card">Gabarit / giration<br><b>${model.synth.gabarit.ok||0} / ${(model.synth.gabarit.ok||0)+(model.synth.gabarit.fail||0)}</b>conformes</div>
+ <div class="card">Surlargeur dispensées<br><b>${(model.synth.surlargeur&&model.synth.surlargeur.ok)||0} / ${model.surlargeurResults ? model.surlargeurResults.length : 0}</b>courbes</div>
+ <div class="card">Clothoïdes en S non conformes<br><b>${model.synth.sConsecutiveNC}</b></div>
+</div>
+
+<h2>Géométrie horizontale (tracé en plan)</h2>
+<table><tr><th>#</th><th>Type</th><th>Chaînage début</th><th>Chaînage fin</th><th>Rayon / A (m)</th><th>Dévers calculé</th><th>Statut</th><th>Détail</th></tr>
+${tableRows(hRows)}</table>
+
+${model.vertElements.length ? `<h2>Géométrie verticale (profil en long)</h2>
+<table><tr><th>#</th><th>Type</th><th>Chaînage début</th><th>Chaînage fin</th><th>Rv (m) / i (%)</th><th>Statut</th><th>Détail</th></tr>
+${tableRows(vRows)}</table>` : ''}
+
+<h2>Gabarit véhicule / giration (OETV)</h2>
+<p class="meta">L'anneau de giration OETV (art. 40 : De ≤ 25.00 m, Di ≥ 10.60 m) n'est évalué comme critère conforme/non-conforme que pour les rayons ≤ ${model.params.giroRadiusThreshold != null ? model.params.giroRadiusThreshold : 30} m (manoeuvres de giration : carrefours, raquettes). Pour les courbes courantes du tracé, seule la surlargeur de balayage B est donnée à titre indicatif (la largeur de chaussée réelle n'est pas contenue dans le LandXML).</p>
+<table><tr><th>#</th><th>Chaînage</th><th>Rayon axe (m)</th><th>Giration ?</th><th>Véhicule</th><th>Largeur balayée B (m)</th><th>Statut</th></tr>
+${tableRows(gRows)}</table>
+
+${slRows.length ? `<h2>Surlargeur en courbe (VSS 40 105b)</h2>
+<p class="meta">Catégorie de véhicule déterminante : ${esc(model.params.surlargeurCatLabel || '')}. Ra (rayon extérieur de la voie élargie) est approximé par le rayon de l'axe, faute de largeur de chaussée réelle dans le LandXML — à affiner si cette donnée est disponible. Φ (angle total du virage) est approximé par l'angle de l'arc circulaire seul.</p>
+<table><tr><th>#</th><th>Chaînage</th><th>Rayon (m)</th><th>e max (m)</th><th>Statut</th><th>Détail</th></tr>
+${tableRows(slRows)}</table>` : ''}
+
+<footer>Document généré automatiquement par l'outil de contrôle d'axe routier (moteur interne, référentiel VSS/OETV/OCR). À valider par un ingénieur qualifié avant usage contractuel.</footer>
+</body></html>`;
+  }
+
+  // ---------- Export DXF (texte, R12 minimal) ----------
+  function dxfNum(n) { return (Math.round(n * 1000) / 1000).toFixed(3); }
+  function dxfLine(layer, color, x1, y1, x2, y2) {
+    return `0\nLINE\n8\n${layer}\n62\n${color}\n10\n${dxfNum(x1)}\n20\n${dxfNum(y1)}\n30\n0.0\n11\n${dxfNum(x2)}\n21\n${dxfNum(y2)}\n31\n0.0\n`;
+  }
+  function dxfText(layer, color, x, y, h, txt) {
+    return `0\nTEXT\n8\n${layer}\n62\n${color}\n10\n${dxfNum(x)}\n20\n${dxfNum(y)}\n30\n0.0\n40\n${dxfNum(h)}\n1\n${String(txt).replace(/\n/g, ' ')}\n`;
+  }
+  function colorFor(status) { return status === 'ok' ? 3 : (status === 'fail' ? 1 : 8); } // 3=vert,1=rouge,8=gris
+
+  function buildDXFString(model) {
+    let ents = '';
+    // --- SITUATION (plan, E=X, N=Y, coordonnées réelles) ---
+    for (const seg of model.planSegments) {
+      const c = colorFor(seg.status);
+      for (let i = 0; i < seg.pts.length - 1; i++) {
+        ents += dxfLine('AXE_SITUATION', c, seg.pts[i].E, seg.pts[i].N, seg.pts[i + 1].E, seg.pts[i + 1].N);
+      }
+      if (seg.pts.length) {
+        ents += dxfText('AXE_SITUATION_TXT', c, seg.pts[0].E, seg.pts[0].N, 2, `${seg.type} #${seg.idx}`);
+      }
+    }
+    // bbox plan pour positionner le profil à côté
+    let minE = Infinity, maxE = -Infinity, minN = Infinity, maxN = -Infinity;
+    model.planSegments.forEach(s => s.pts.forEach(p => {
+      if (p.E < minE) minE = p.E; if (p.E > maxE) maxE = p.E;
+      if (p.N < minN) minN = p.N; if (p.N > maxN) maxN = p.N;
+    }));
+    if (!isFinite(minE)) { minE = 0; maxE = 100; minN = 0; maxN = 100; }
+    const offsetX = (isFinite(maxE) ? maxE - minE : 100) + 50;
+    const baseX = minE + offsetX, baseY = minN;
+
+    // --- ÉTENDU (profil en long, X=chaînage, Y=altitude exagérée x5, décalé à côté du plan) ---
+    const VEXAG = 5;
+    let minElev = Infinity, maxElev = -Infinity;
+    model.profileSegments.forEach(s => s.pts.forEach(p => { if (p.elev < minElev) minElev = p.elev; if (p.elev > maxElev) maxElev = p.elev; }));
+    if (!isFinite(minElev)) minElev = 0;
+    for (const seg of model.profileSegments) {
+      const c = colorFor(seg.status);
+      for (let i = 0; i < seg.pts.length - 1; i++) {
+        const x1 = baseX + seg.pts[i].sta - model.staStart;
+        const y1 = baseY + (seg.pts[i].elev - minElev) * VEXAG;
+        const x2 = baseX + seg.pts[i + 1].sta - model.staStart;
+        const y2 = baseY + (seg.pts[i + 1].elev - minElev) * VEXAG;
+        ents += dxfLine('AXE_ETENDU', c, x1, y1, x2, y2);
+      }
+      if (seg.pts.length) {
+        const p0 = seg.pts[0];
+        ents += dxfText('AXE_ETENDU_TXT', c, baseX + p0.sta - model.staStart, baseY + (p0.elev - minElev) * VEXAG, 2, `${seg.type}`);
+      }
+    }
+    ents += dxfText('AXE_ETENDU_TXT', 7, baseX, baseY - 10, 3, `PROFIL EN LONG — échelle verticale x${VEXAG} — axe ${model.name}`);
+    ents += dxfText('AXE_SITUATION_TXT', 7, minE, minN - 10, 3, `TRACÉ EN PLAN (SITUATION) — axe ${model.name}`);
+
+    const header = `0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009\n0\nENDSEC\n`;
+    const tables = `0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n5\n` +
+      ['AXE_SITUATION', 'AXE_SITUATION_TXT', 'AXE_ETENDU', 'AXE_ETENDU_TXT'].map(l => `0\nLAYER\n2\n${l}\n70\n0\n62\n7\n6\nCONTINUOUS\n`).join('') +
+      `0\nENDTAB\n0\nENDSEC\n`;
+    const entities = `0\nSECTION\n2\nENTITIES\n${ents}0\nENDSEC\n`;
+    const eof = `0\nEOF\n`;
+    return header + tables + entities + eof;
+  }
+
+  return { buildModel, buildWorkbookData, buildReportHTML, buildDXFString, VEHICLES, SURLARGEUR_CATEGORIES: RoadEngine.SURLARGEUR_CATEGORIES };
+});
+
+
+/* ============================================================
+   UI — glue DOM, rendu SVG, exports via capability `downloads`
+   ============================================================ */
+(function () {
+  'use strict';
+  let currentFiles = {}; // filename -> {angularUnit, alignments}
+  let currentAlignRef = null; // {fileKey, alignIdx, alignment}
+  let currentModel = null;
+
+  const el = id => document.getElementById(id);
+  function setStatus(msg, kind) { const s = el('status-msg'); s.textContent = msg; s.className = kind || ''; }
+
+  el('fileInput').addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setStatus('Lecture de ' + files.length + ' fichier(s)…');
+    currentFiles = {};
+    const alignSelect = el('alignSelect');
+    alignSelect.innerHTML = '';
+    let total = 0, errs = [];
+    for (const f of files) {
+      try {
+        const text = await readFileAsText(f);
+        const parsed = RoadEngine.parseLandXML(text);
+        currentFiles[f.name] = parsed;
+        parsed.alignments.forEach((al, i) => {
+          const opt = document.createElement('option');
+          opt.value = f.name + '::' + i;
+          opt.textContent = `${f.name} — ${al.name} (${al.horiz.length} élém., ${al.vertRaw.length} pts vert.)`;
+          alignSelect.appendChild(opt);
+          total++;
+        });
+      } catch (err) {
+        errs.push(f.name + ' : ' + err.message);
+      }
+    }
+    el('fileList').textContent = Object.keys(currentFiles).join(', ');
+    alignSelect.disabled = total === 0;
+    if (errs.length) setStatus('Erreurs : ' + errs.join(' | '), 'err');
+    else setStatus(total + ' axe(s) importé(s). Choisissez un axe puis « Recalculer ».', 'ok');
+    if (total > 0) recalc();
+  });
+
+  function readFileAsText(file) {
+    // Essai UTF-8 d'abord ; certains exports (ex. Cadwork) sont en latin-1/ISO-8859-1.
+    // Si le texte UTF-8 contient le caractère de remplacement U+FFFD (signe de mauvais
+    // décodage), on relit le même fichier en latin1.
+    return readAs(file, 'UTF-8').then(text => {
+      if (text.indexOf('\uFFFD') >= 0) return readAs(file, 'ISO-8859-1');
+      return text;
+    });
+  }
+  function readAs(file, encoding) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsText(file, encoding);
+    });
+  }
+
+  function getParams() {
+    return {
+      Vp: parseFloat(el('pVp').value) || 80,
+      fT: parseFloat(el('pFt').value),
+      fTRegime: el('pFtRegime') ? el('pFtRegime').value : 'ch',
+      fL: parseFloat(el('pFl').value),
+      fLRegime: el('pFlRegime') ? el('pFlRegime').value : 'ch_autres',
+      q: (parseFloat(el('pQ').value) || 7) / 100,
+      tr: parseFloat(el('pTr').value) || 2.0,
+      vehicleKey: el('pVehicle').value,
+      giroRadiusThreshold: parseFloat(el('pGiro').value) || 30,
+      surlargeurCatKey: el('pSurlCat') ? el('pSurlCat').value : 'B',
+    };
+  }
+
+  // Proposition automatique de f_T / f_L (interpolés, VSS Tab. 17.7) quand Vp ou le référentiel change —
+  // l'utilisateur reste libre de modifier la valeur proposée.
+  function suggestFrictionValues() {
+    const Vp = parseFloat(el('pVp').value) || 80;
+    const fTRegime = el('pFtRegime') ? el('pFtRegime').value : 'ch';
+    const fLRegime = el('pFlRegime') ? el('pFlRegime').value : 'ch_autres';
+    if (el('pFt')) el('pFt').value = RoadEngine.suggestFT(Vp, fTRegime).toFixed(2);
+    if (el('pFl')) el('pFl').value = RoadEngine.suggestFL(Vp, fLRegime).toFixed(2);
+  }
+  ['pVp', 'pFtRegime', 'pFlRegime'].forEach(id => {
+    if (el(id)) el(id).addEventListener('change', suggestFrictionValues);
+  });
+  suggestFrictionValues(); // valeurs initiales proposées au chargement
+
+  el('btnRecalc').addEventListener('click', recalc);
+
+  function recalc() {
+    const sel = el('alignSelect').value;
+    if (!sel) { setStatus('Importez un fichier LandXML et choisissez un axe.', 'err'); return; }
+    const [fname, idxStr] = sel.split('::');
+    const parsed = currentFiles[fname];
+    if (!parsed) { setStatus('Fichier introuvable — réimportez.', 'err'); return; }
+    const alignment = parsed.alignments[parseInt(idxStr, 10)];
+    currentAlignRef = { fname, idx: idxStr, alignment };
+    try {
+      currentModel = AppCore.buildModel(alignment, getParams());
+    } catch (e) {
+      setStatus('Erreur de calcul : ' + e.message, 'err');
+      console.error(e);
+      return;
+    }
+    renderAll();
+    setStatus('Calcul effectué pour « ' + alignment.name + ' ».', 'ok');
+  }
+
+  // ---------- Rendu ----------
+  function renderAll() {
+    el('resultsPanel').style.display = '';
+    renderSummary();
+    renderPlan();
+    renderProfile();
+    renderTables();
+  }
+
+  function renderSummary() {
+    const m = currentModel;
+    const cards = [
+      ['Horizontal', m.synth.horiz.ok || 0, (m.synth.horiz.ok||0)+(m.synth.horiz.fail||0)],
+      ['Vertical', m.synth.vert.ok || 0, (m.synth.vert.ok||0)+(m.synth.vert.fail||0)],
+      ['Gabarit/giration', m.synth.gabarit.ok || 0, (m.synth.gabarit.ok||0)+(m.synth.gabarit.fail||0)],
+      ['Clothoïdes-S non conf.', m.synth.sConsecutiveNC, null],
+    ];
+    el('summaryCards').innerHTML = cards.map(([lbl, a, b]) =>
+      `<div class="card"><div class="lbl">${lbl}</div><b>${b !== null ? a + ' / ' + b : a}</b></div>`
+    ).join('');
+  }
+
+  function statusColor(status) { return status === 'ok' ? '#1a7f37' : (status === 'fail' ? '#b42318' : '#888'); }
+
+  function renderPlan() {
+    const svg = el('svgPlan');
+    const m = currentModel;
+    let minE = Infinity, maxE = -Infinity, minN = Infinity, maxN = -Infinity;
+    m.planSegments.forEach(s => s.pts.forEach(p => { if (p.E < minE) minE = p.E; if (p.E > maxE) maxE = p.E; if (p.N < minN) minN = p.N; if (p.N > maxN) maxN = p.N; }));
+    if (!isFinite(minE)) { svg.innerHTML = '<text x="20" y="40">Pas de géométrie horizontale.</text>'; return; }
+    const padding = (maxE - minE) * 0.08 + 5;
+    const W = 1000, H = 600;
+    const spanE = (maxE - minE) + 2 * padding, spanN = (maxN - minN) + 2 * padding;
+    const scale = Math.min(W / spanE, H / spanN);
+    function toSvg(p) { return { x: (p.E - minE + padding) * scale, y: H - (p.N - minN + padding) * scale }; } // N up => flip Y
+    let paths = '';
+    m.planSegments.forEach(seg => {
+      if (seg.pts.length < 2) return;
+      const d = seg.pts.map((p, i) => (i === 0 ? 'M' : 'L') + toSvg(p).x.toFixed(1) + ',' + toSvg(p).y.toFixed(1)).join(' ');
+      paths += `<path d="${d}" fill="none" stroke="${statusColor(seg.status)}" stroke-width="2.5" />`;
+    });
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.innerHTML = paths;
+  }
+
+  function renderProfile() {
+    const svg = el('svgProfile');
+    const m = currentModel;
+    if (!m.profileSegments.length) { svg.innerHTML = '<text x="20" y="40" fill="currentColor">Pas de profil en long disponible pour cet axe.</text>'; return; }
+    let minSta = Infinity, maxSta = -Infinity, minElev = Infinity, maxElev = -Infinity;
+    m.profileSegments.forEach(s => s.pts.forEach(p => { if (p.sta < minSta) minSta = p.sta; if (p.sta > maxSta) maxSta = p.sta; if (p.elev < minElev) minElev = p.elev; if (p.elev > maxElev) maxElev = p.elev; }));
+    const W = 1000, H = 400, padX = 40, padY = 30;
+    const spanSta = maxSta - minSta || 1, spanElev = (maxElev - minElev) || 1;
+    const scaleX = (W - 2 * padX) / spanSta, scaleY = (H - 2 * padY) / spanElev;
+    function toSvg(p) { return { x: padX + (p.sta - minSta) * scaleX, y: H - padY - (p.elev - minElev) * scaleY }; }
+    let paths = '';
+    m.profileSegments.forEach(seg => {
+      if (seg.pts.length < 2) return;
+      const d = seg.pts.map((p, i) => (i === 0 ? 'M' : 'L') + toSvg(p).x.toFixed(1) + ',' + toSvg(p).y.toFixed(1)).join(' ');
+      paths += `<path d="${d}" fill="none" stroke="${statusColor(seg.status)}" stroke-width="2.5" />`;
+    });
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.innerHTML = paths;
+  }
+
+  function badgeHTML(status) { return `<span class="badge ${status}">${status === 'ok' ? 'Conforme' : status === 'fail' ? 'NON CONFORME' : 'Info'}</span>`; }
+
+  function renderTables() {
+    const m = currentModel;
+    let h = '<tr><th>#</th><th>Type</th><th>Chaînage début</th><th>Chaînage fin</th><th>Long. (m)</th><th>Rayon/A (m)</th><th>Dévers calculé</th><th>Statut</th><th>Détail</th></tr>';
+    m.horizEval.forEach(e => {
+      const chk = e.checks && e.checks[0];
+      const devers = (e.checks || []).find(c => c.label && c.label.indexOf('Dévers calculé') >= 0);
+      h += `<tr><td>${e.idx}</td><td>${RoadEngine.typeLabelFR(e.type)}</td><td>${e.kmStart.toFixed(2)}</td><td>${e.kmEnd.toFixed(2)}</td><td>${e.length.toFixed(2)}</td><td>${e.radius != null ? e.radius.toFixed(1) : (e.A != null ? 'A='+e.A.toFixed(1) : '—')}</td><td>${devers ? devers.value.toFixed(2) + ' %' : '—'}</td><td>${badgeHTML(e.status)}</td><td>${chk ? chk.detail : ''}</td></tr>`;
+    });
+    el('tblHoriz').innerHTML = h;
+
+    let v = '<tr><th>#</th><th>Type</th><th>Chaînage début</th><th>Chaînage fin</th><th>Long. (m)</th><th>Rv(m)/i(%)</th><th>Statut</th><th>Détail</th></tr>';
+    m.vertElements.forEach(e => { const chk = e.checks && e.checks[0]; v += `<tr><td>${e.idx}</td><td>${RoadEngine.typeLabelFR(e.type)}</td><td>${e.kmStart.toFixed(2)}</td><td>${e.kmEnd.toFixed(2)}</td><td>${e.length.toFixed(2)}</td><td>${e.radius != null ? e.radius.toFixed(0) : (e.grade != null ? (e.grade*100).toFixed(2)+'%' : '—')}</td><td>${badgeHTML(e.status)}</td><td>${chk ? chk.detail : ''}</td></tr>`; });
+    el('tblVert').innerHTML = v || '<tr><td>Pas de profil en long.</td></tr>';
+
+    let g = '<tr><th>#</th><th>Chaînage</th><th>Rayon (m)</th><th>Giration?</th><th>Véhicule</th><th>Ri(m)</th><th>Re(m)</th><th>B(m)</th><th>Statut</th></tr>';
+    m.gabaritResults.forEach(gr => { g += `<tr><td>${gr.idx}</td><td>${gr.kmStart.toFixed(2)}</td><td>${gr.radius.toFixed(1)}</td><td>${gr.isGiration?'Oui':'Non'}</td><td>${gr.vehicleLabel}</td><td>${gr.Ri!=null?gr.Ri.toFixed(2):'—'}</td><td>${gr.Re!=null?gr.Re.toFixed(2):'—'}</td><td>${gr.B!=null?gr.B.toFixed(2):'—'}</td><td>${badgeHTML(gr.status)}</td></tr>`; });
+    el('tblGabarit').innerHTML = g;
+
+    let sl = '<tr><th>#</th><th>Chaînage</th><th>Rayon≈Ra (m)</th><th>e max (m)</th><th>Dispensée ?</th><th>Statut</th><th>Détail</th></tr>';
+    (m.surlargeurResults || []).forEach(sr => { sl += `<tr><td>${sr.idx}</td><td>${sr.kmStart.toFixed(2)}</td><td>${sr.radius.toFixed(1)}</td><td>${sr.applicable && sr.e!=null ? sr.e.toFixed(3) : '—'}</td><td>${sr.applicable ? (sr.dispense?'Oui':'Non') : 'Hors domaine'}</td><td>${badgeHTML(sr.status)}</td><td>${sr.applicable ? sr.detail : sr.reason}</td></tr>`; });
+    el('tblSurl').innerHTML = sl;
+
+    let s = '<tr><th>Spiral A</th><th>Spiral B</th><th>A1/A2</th><th>Statut</th><th>Détail</th></tr>';
+    m.sConsecutive.forEach(sc => { s += `<tr><td>${sc.idxA}</td><td>${sc.idxB}</td><td>${sc.ratio.toFixed(3)}</td><td>${badgeHTML(sc.ok?'ok':'fail')}</td><td>${sc.detail}</td></tr>`; });
+    el('tblS').innerHTML = s || '<tr><td>Aucune paire de clothoïdes consécutives.</td></tr>';
+  }
+
+  // ---------- Tabs ----------
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.tabpanel').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    el('tab-' + t.dataset.tab).classList.add('active');
+  }));
+
+  // ---------- Exports ----------
+  // Version autonome (GitHub Pages / fichier local) : téléchargement natif du navigateur.
+  // Si la page tourne dans claude.ai, la capability `downloads` est tentée d'abord.
+  function nativeBrowserSave(filename, data) {
+    const blob = data instanceof Blob ? data : new Blob([data], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+  async function doSave(filename, data) {
+    try {
+      if (typeof claude !== 'undefined' && claude && claude.use) {
+        const cap = await claude.use('downloads');
+        if (cap) { await cap.save({ filename, data }); el('exportHint').textContent = 'Fichier « ' + filename + ' » proposé au téléchargement.'; return; }
+      }
+    } catch (e) { /* repli natif */ }
+    try { nativeBrowserSave(filename, data); el('exportHint').textContent = 'Fichier « ' + filename + ' » téléchargé.'; }
+    catch (e) { el('exportHint').textContent = 'Téléchargement impossible (' + (e && e.message || e) + ').'; }
+  }
+
+  el('btnExportReport').addEventListener('click', () => {
+    if (!currentModel) return;
+    const html = AppCore.buildReportHTML(currentModel);
+    doSave('Rapport_' + safeName(currentModel.name) + '.html', html);
+  });
+
+  el('btnExportExcel').addEventListener('click', () => {
+    if (!currentModel) return;
+    const sheets = AppCore.buildWorkbookData(currentModel);
+    const wb = XLSX.utils.book_new();
+    sheets.forEach(s => { const ws = XLSX.utils.aoa_to_sheet(s.rows); XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31)); });
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    doSave('Controle_' + safeName(currentModel.name) + '.xlsx', new Blob([wbout], { type: 'application/octet-stream' }));
+  });
+
+  el('btnExportDxf').addEventListener('click', () => {
+    if (!currentModel) return;
+    const dxf = AppCore.buildDXFString(currentModel);
+    doSave('Axe_' + safeName(currentModel.name) + '.dxf', dxf);
+  });
+
+  function safeName(s) { return String(s).replace(/[^a-z0-9_-]+/gi, '_').slice(0, 60); }
+})();
+</script>
+
+</body></html>
