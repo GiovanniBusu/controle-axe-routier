@@ -2,6 +2,6 @@
   "dependencies": {
     "@xmldom/xmldom": "^0.9.12",
     "dxf-parser": "^1.1.2",
-    "xlsx": "^0.18.5"
+    "xlsx-js-style": "^1.2.0"
   }
 }

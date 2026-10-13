@@ -24,7 +24,7 @@ for (const path of files) {
     console.log(`--- Alignment "${al.name}" (${al.horiz.length} éléments horiz, ${al.vertRaw.length} pts vert) ---`);
     let model;
     try {
-      model = AppCore.buildModel(al, { Vp: 80, fT: 0.12, q: 0.07, vehicleKey: 'Bus12' });
+      model = AppCore.buildModel(al, { Vp: 80, fT: 0.12, q: 0.07, vehicleKey: 'Bus12', tolerance: 0.05, largeurVoie: 3.25, deltaIMax: 1.5 });
     } catch (e) {
       console.log('ERREUR buildModel:', e.message, e.stack); totalErrors++; continue;
     }
@@ -44,13 +44,13 @@ for (const path of files) {
 
     // Build exports (pure data/text generation - no DOM needed)
     let wb, report, dxf;
-    try { wb = AppCore.buildWorkbookData(model); } catch (e) { console.log('ERREUR buildWorkbookData:', e.message); totalErrors++; }
+    try { wb = AppCore.buildWorkbookData(model); const XL=require('xlsx-js-style'); const w=AppCore.buildWorkbook(XL, model); XL.writeFile(w,'/tmp/sample_'+al.name.replace(/[^a-z0-9]/gi,'_')+'.xlsx'); } catch (e) { console.log('ERREUR buildWorkbookData:', e.message); totalErrors++; }
     try { report = AppCore.buildReportHTML(model); } catch (e) { console.log('ERREUR buildReportHTML:', e.message); totalErrors++; }
     try { dxf = AppCore.buildDXFString(model); } catch (e) { console.log('ERREUR buildDXFString:', e.message); totalErrors++; }
     if (wb) console.log('Excel sheets:', wb.map(s => s.name + '(' + s.rows.length + ' lignes)').join(', '));
     if (report) console.log('Report HTML length:', report.length, 'chars');
     if (dxf) {
-      console.log('DXF length:', dxf.length, 'chars, lignes ENTITIES count:', (dxf.match(/0\nLINE/g)||[]).length, 'LINE,', (dxf.match(/0\nTEXT/g)||[]).length, 'TEXT');
+      console.log('DXF length:', dxf.length, 'chars, lignes ENTITIES count:', (dxf.match(/0\nARC/g)||[]).length, 'ARC,', (dxf.match(/0\nTEXT/g)||[]).length, 'TEXT');
       // write sample dxf to disk for one alignment for visual spot check
       fs.writeFileSync('/tmp/sample_' + al.name.replace(/[^a-z0-9]/gi,'_') + '.dxf', dxf);
     }

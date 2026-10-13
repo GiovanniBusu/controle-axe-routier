@@ -302,98 +302,186 @@
   }
 
   // ---------- Dévers en courbe — formule générale officielle p = 2 + 5·(R_min(Vp,7%)/R) [%] ----------
-  // (confirmée par l'utilisateur — réf. TRAN 23.5 — bornée entre 2% (grand rayon) et 7% (R=R_min))
+  // (confirmée par l'utilisateur — réf. TRAN 23.5 — bornée entre 3% (minimum retenu, grands rayons) et 7% (R=R_min))
   const R_MIN_P7_TABLE = { 40: 45, 50: 75, 60: 120, 70: 175, 80: 240, 90: 320, 100: 420, 110: 525, 120: 650 }; // VSS 40 100a Tab.1
   function deversCalcule(Vp, R) {
     if (!(R > 0)) return null;
     const rmin7 = interpVpTable(R_MIN_P7_TABLE, Vp);
     const p = 2 + 5 * (rmin7 / R);
-    return Math.max(2, Math.min(7, p));
+    return Math.max(3, Math.min(7, p)); // retour utilisateur : dévers minimum = 3 %
   }
+
+  // ---------- Tables VSS 40 100a Tab.1 (valeurs indicatives, non bloquantes) ----------
+  const L_GMIN_TABLE = { 40: 30, 50: 40, 60: 50, 70: 65, 80: 90, 90: 115, 100: 150, 110: 190, 120: 250 };
+  const L_ARC_MIN_TABLE = { 40: 25, 50: 35, 60: 55, 70: 70, 80: 90, 90: 115, 100: 150, 110: 180, 120: 230 };
+
+  // ---------- Fabrique de contrôle avec gestion de la tolérance ----------
+  // kind 'min' : value >= limit ; kind 'max' : value <= limit.
+  // state : 'ok' | 'tolerance' (hors limite mais dans la tolérance %, orange) | 'fail'.
+  function mkCheck(o, tol) {
+    const strict = o.kind === 'min' ? o.value >= o.limit : o.value <= o.limit;
+    let state = strict ? 'ok' : 'fail';
+    if (!strict && tol > 0) {
+      const within = o.kind === 'min' ? o.value >= o.limit * (1 - tol) : o.value <= o.limit * (1 + tol);
+      if (within) state = 'tolerance';
+    }
+    let detail = o.detail;
+    if (state === 'tolerance') detail += ` — hors limite, dans la tolérance de ${(tol * 100).toFixed(1).replace(/\.0$/, '')} %`;
+    return { label: o.label, key: o.key, value: o.value, threshold: o.limit, kind: o.kind, unit: o.unit || '',
+      ok: strict, state, detail, severity: o.severity };
+  }
+  function aggStatus(checks) {
+    const blocking = checks.filter(c => c.severity !== 'info');
+    if (!blocking.length) return 'info';
+    if (blocking.some(c => c.state === 'fail')) return 'fail';
+    if (blocking.some(c => c.state === 'tolerance')) return 'tolerance';
+    return 'ok';
+  }
+  const CALC_DEFAULT = { horiz: true, devers: true, derapage: true, deltaI: true, vert: true, visib: true, giro: true, surl: true };
 
   function evaluateHorizontal(horiz, params) {
     const Vp = params.Vp || 80;
     const fTRegime = params.fTRegime || 'ch';
     const fT = params.fT != null ? params.fT : suggestFT(Vp, fTRegime);
     const qUsual = params.q != null ? params.q : 0.07; // q_design — dévers maximal de calcul (7%), utilisé pour R_min uniquement
+    const tol = params.tolerance > 0 ? params.tolerance : 0; // fraction (0 = aucune tolérance)
+    const calc = Object.assign({}, CALC_DEFAULT, params.calc || {});
     const rMin = Rmin(Vp, fT, qUsual);
     const lMax = maxAlignLength(Vp);
+    const lGmin = interpVpTable(L_GMIN_TABLE, Vp);
+    const lArcMin = interpVpTable(L_ARC_MIN_TABLE, Vp);
 
-    return horiz.map((el, idx) => {
+    const out = horiz.map((el, idx) => {
       const checks = [];
-      if (el.type === 'Curve' && el.radius) {
-        checks.push({
-          label: `R ≥ R_min(${Vp} km/h)`,
-          value: el.radius, threshold: rMin,
-          ok: el.radius >= rMin,
-          detail: `R = ${el.radius.toFixed(1)} m vs R_min = ${rMin.toFixed(1)} m (f_T=${fT}, q_design=${(qUsual * 100).toFixed(0)}%)`,
-        });
-        // Dévers calculé pour CE rayon (formule générale p=2+5·Rmin7%/R) — valeur informative, pas un contrôle pass/fail
+      if (calc.horiz) {
+        if (el.type === 'Curve' && el.radius) {
+          checks.push(mkCheck({
+            key: 'Rmin', label: `R ≥ R_min(${Vp} km/h)`, kind: 'min', value: el.radius, limit: rMin, unit: 'm',
+            detail: `R = ${el.radius.toFixed(1)} m ≥ R_min = ${rMin.toFixed(1)} m (f_T=${fT}, q_design=${(qUsual * 100).toFixed(0)}%)`,
+          }, tol));
+          checks.push(mkCheck({
+            key: 'Larc', label: `L ≥ L_min arc (indicatif, VSS 40 100a Tab.1)`, kind: 'min', value: el.length, limit: lArcMin, unit: 'm', severity: 'info',
+            detail: `L = ${el.length.toFixed(1)} m ≥ L_min = ${lArcMin.toFixed(1)} m (valeur indicative)`,
+          }, tol));
+        }
+        if (el.type === 'Spiral' && el.A != null) {
+          const Rfin = isFinite(el.radiusStart) ? el.radiusStart : el.radiusEnd;
+          if (Rfin) {
+            // VSS 40 100a §6, p.3 : domaine R/3 ≤ A ≤ R (deux conditions explicites et distinctes de la norme)
+            checks.push(mkCheck({
+              key: 'Amin', label: 'A ≥ R/3 (perceptibilité du virage)', kind: 'min', value: el.A, limit: Rfin / 3, unit: 'm',
+              detail: `A = ${el.A.toFixed(1)} m ≥ A_min = R/3 = ${(Rfin / 3).toFixed(1)} m (R=${Rfin.toFixed(1)} m)`,
+            }, tol));
+            checks.push(mkCheck({
+              key: 'Amax', label: 'A ≤ R (perceptibilité de la clothoïde)', kind: 'max', value: el.A, limit: Rfin, unit: 'm',
+              detail: `A = ${el.A.toFixed(1)} m ≤ A_max = R = ${Rfin.toFixed(1)} m`,
+            }, tol));
+          }
+        }
+        if (el.type === 'Line') {
+          checks.push(mkCheck({
+            key: 'Lmax', label: `L ≤ L_Gmax = 15·V_p (VSS 40 100a Tab.1)`, kind: 'max', value: el.length, limit: lMax, unit: 'm', severity: 'info', // dépassement fréquent, pas toujours critique
+            detail: `L = ${el.length.toFixed(1)} m ≤ L_Gmax = ${lMax.toFixed(1)} m`,
+          }, tol));
+          checks.push(mkCheck({
+            key: 'Lmin', label: `L ≥ L_Gmin (indicatif, VSS 40 100a Tab.1)`, kind: 'min', value: el.length, limit: lGmin, unit: 'm', severity: 'info',
+            detail: `L = ${el.length.toFixed(1)} m ≥ L_Gmin = ${lGmin.toFixed(1)} m (valeur indicative)`,
+          }, tol));
+        }
+      }
+      if (calc.derapage && el.type === 'Curve' && el.radius) {
+        // Dérapage (TRAN 17.6.3, formule 17.31 : R_min = V²/(g·(CFT+p))) ⇔ f_T requis = V²/(127·R) − p/100 ≤ f_T admissible
+        const pD = deversCalcule(Vp, el.radius);
+        const fTreq = (Vp * Vp) / (127 * el.radius) - pD / 100;
+        checks.push(mkCheck({
+          key: 'derapage', label: 'Dérapage : f_T requis ≤ f_T admissible', kind: 'max', value: fTreq, limit: fT, unit: '',
+          detail: `f_T requis = V²/(127·R) − p/100 = ${fTreq.toFixed(3)} ≤ f_T = ${fT} (p = ${pD.toFixed(2)} %, R = ${el.radius.toFixed(1)} m)`,
+        }, tol));
+      }
+      if (calc.devers && el.type === 'Curve' && el.radius) {
+        // Dévers calculé pour CE rayon (p = 2 + 5·R_min(Vp)/R, minimum 3 %) — valeur informative, pas un contrôle pass/fail
         const pDevers = deversCalcule(Vp, el.radius);
         if (pDevers != null) {
           checks.push({
-            label: `Dévers calculé p(R)`,
-            value: pDevers, threshold: null,
-            ok: true, severity: 'info',
-            detail: `p = 2 + 5·R_min(${Vp})/R = ${pDevers.toFixed(2)} % (R=${el.radius.toFixed(1)} m)`,
+            label: 'Dévers calculé p(R)', key: 'devers', value: pDevers, threshold: null, unit: '%',
+            ok: true, state: 'ok', severity: 'info',
+            detail: `p = 2 + 5·R_min(${Vp})/R = ${pDevers.toFixed(2)} % (R=${el.radius.toFixed(1)} m ; minimum 3 %, maximum 7 %)`,
           });
         }
       }
-      if (el.type === 'Spiral' && el.A != null) {
-        const Rfin = isFinite(el.radiusStart) ? el.radiusStart : el.radiusEnd;
-        if (Rfin) {
-          // VSS 40 100a §6, p.3 : domaine R/3 ≤ A ≤ R (deux conditions explicites et distinctes de la norme)
-          const AminGuide = Rfin / 3;
-          const AmaxGuide = Rfin;
-          checks.push({
-            label: 'A ≥ R/3 (perceptibilité du virage)',
-            value: el.A, threshold: AminGuide,
-            ok: el.A >= AminGuide,
-            detail: `A = ${el.A.toFixed(1)} m vs A_min = ${AminGuide.toFixed(1)} m (R=${Rfin.toFixed(1)} m)`,
-          });
-          checks.push({
-            label: 'A ≤ R (perceptibilité de la clothoïde)',
-            value: el.A, threshold: AmaxGuide,
-            ok: el.A <= AmaxGuide,
-            detail: `A = ${el.A.toFixed(1)} m vs A_max = R = ${AmaxGuide.toFixed(1)} m`,
-          });
-        }
-      }
-      if (el.type === 'Line') {
-        checks.push({
-          label: `L ≤ L_Gmax = 15·V_p (VSS 40 100a Tab.1)`,
-          value: el.length, threshold: lMax,
-          ok: el.length <= lMax,
-          detail: `L = ${el.length.toFixed(1)} m vs L_Gmax = ${lMax.toFixed(1)} m`,
-          severity: 'info', // dépassement fréquent et pas toujours critique
-        });
-      }
-      const blocking = checks.filter(c => c.severity !== 'info');
-      const status = checks.length === 0 ? 'info' : (blocking.length === 0 ? 'info' : (blocking.every(c => c.ok) ? 'ok' : 'fail'));
-      return Object.assign({}, el, { idx, checks, status });
+      return Object.assign({}, el, { idx, checks });
     });
-  }
 
-  function evaluateSConsecutiveClothoids(horizEvaluated) {
-    // Clothoïde en S : deux clothoïdes STRICTEMENT adjacentes (pas d'arc/alignement entre elles),
-    // de sens de rotation opposé (point d'inflexion). Règle : 0.6667 <= A1/A2 <= 1.5
-    const notes = [];
-    for (let i = 0; i < horizEvaluated.length - 1; i++) {
-      const a = horizEvaluated[i], b = horizEvaluated[i + 1];
-      if (a.type === 'Spiral' && b.type === 'Spiral' && a.A && b.A && a.rot !== b.rot) {
-        const ratio = a.A / b.A;
-        const ok = ratio >= 0.6667 && ratio <= 1.5;
-        notes.push({
-          idxA: a.idx, idxB: b.idx, ratio, ok,
-          detail: `A1/A2 = ${ratio.toFixed(3)} (A1=${a.A.toFixed(1)}, A2=${b.A.toFixed(1)}) — borne [0.6667 ; 1.5]`,
+    // Clothoïdes en S — contrôle INTÉGRÉ à la géométrie horizontale : deux clothoïdes strictement adjacentes,
+    // de sens de rotation opposé (point d'inflexion). Règle VSS 40 100a : 2/3 ≤ A1/A2 ≤ 3/2.
+    if (calc.horiz) {
+      for (let i = 0; i < out.length - 1; i++) {
+        const a = out[i], b = out[i + 1];
+        if (a.type === 'Spiral' && b.type === 'Spiral' && a.A && b.A && a.rot !== b.rot) {
+          const ratio = a.A / b.A;
+          const okLo = ratio >= 2 / 3, okHi = ratio <= 1.5;
+          const within = (v, lim, kind) => kind === 'min' ? v >= lim * (1 - tol) : v <= lim * (1 + tol);
+          let state = (okLo && okHi) ? 'ok' : ((tol > 0 && within(ratio, 2 / 3, 'min') && within(ratio, 1.5, 'max')) ? 'tolerance' : 'fail');
+          const detail = `Clothoïdes en S #${a.idx}/#${b.idx} : A1/A2 = ${ratio.toFixed(3)} (A1=${a.A.toFixed(1)}, A2=${b.A.toFixed(1)}) ∈ [0.667 ; 1.5]` + (state === 'tolerance' ? ' — hors limite, dans la tolérance' : '');
+          [a, b].forEach(x => x.checks.push({
+            label: 'Clothoïde en S : 2/3 ≤ A1/A2 ≤ 3/2', key: 'S', value: ratio, threshold: null, unit: '',
+            ok: okLo && okHi, state, detail,
+          }));
+        }
+      }
+    }
+    // Δi — rampe de dévers (TRAN Formule 23.4 : Δi = (p2·a2 ± p1·a1)/L ; Δi_min = 0,1·a, Formule 23.5)
+    // Hypothèse : axe de rotation = axe de chaussée, a = largeur de voie (m) ; dévers de l'alignement droit = toit (−toit % côté extérieur).
+    // Clothoïde simple : L = longueur de la clothoïde. Clothoïdes en S : changement réparti de part et d'autre du point de bascule,
+    // L = L1 + L2 (les deux clothoïdes), même Δi porté par les deux.
+    if (calc.deltaI) {
+      const a = params.largeurVoie > 0 ? params.largeurVoie : 3.0;
+      const toit = params.toit != null ? params.toit : 2.5;
+      const dMax = params.deltaIMax != null ? params.deltaIMax : 1.5;
+      const minMode = params.deltaIMinMode || 'formule';
+      const dMin = minMode === 'none' ? null : 0.1 * a;
+      const pOf = e => (e && e.type === 'Curve' && e.radius) ? deversCalcule(Vp, e.radius) : null;
+      const done = new Set();
+      for (let i = 0; i < out.length; i++) {
+        const s = out[i];
+        if (s.type !== 'Spiral' || done.has(i)) continue;
+        const prev = out[i - 1], next = out[i + 1];
+        let dI = null, L = s.length, desc = '', members = [i];
+        if (next && next.type === 'Spiral' && next.rot !== s.rot && out[i - 1] && out[i + 2]) {
+          const p1 = pOf(out[i - 1]), p2 = pOf(out[i + 2]);
+          if (p1 != null && p2 != null) { L = s.length + next.length; dI = (p1 + p2) * a / L; members = [i, i + 1]; desc = `S : (p1 + p2)·a/(L1+L2) = (${p1.toFixed(2)} + ${p2.toFixed(2)})·${a}/${L.toFixed(1)}`; }
+        } else if (prev && next) {
+          const pp = pOf(prev), pn = pOf(next);
+          if (pp == null && pn != null && prev.type === 'Line') { dI = (pn + toit) * a / L; desc = `(p + toit)·a/L = (${pn.toFixed(2)} + ${toit})·${a}/${L.toFixed(1)}`; }
+          else if (pn == null && pp != null && next.type === 'Line') { dI = (pp + toit) * a / L; desc = `(p + toit)·a/L = (${pp.toFixed(2)} + ${toit})·${a}/${L.toFixed(1)}`; }
+          else if (pp != null && pn != null) { dI = Math.abs(pn - pp) * a / L; desc = `|p2 − p1|·a/L = |${pn.toFixed(2)} − ${pp.toFixed(2)}|·${a}/${L.toFixed(1)}`; }
+        }
+        if (dI == null || !isFinite(dI) || dI < 0.001) continue; // pas de variation de dévers (p1 = p2) : rampe sans objet
+        members.forEach(m => {
+          done.add(m);
+          const e = out[m];
+          e.deltaI = dI; e.deltaIMax = dMax; e.deltaIMin = dMin;
+          e.checks.push(mkCheck({ key: 'dImax', label: 'Δi ≤ Δi_max (rampe de dévers, Formule 23.4)', kind: 'max', value: dI, limit: dMax, unit: '%',
+            detail: `Δi = ${dI.toFixed(3)} % ≤ Δi_max = ${dMax} % — ${desc}` }, tol));
+          if (dMin != null) e.checks.push(mkCheck({ key: 'dImin', label: 'Δi ≥ Δi_min = 0,1·a (Formule 23.5)', kind: 'min', value: dI, limit: dMin, unit: '%',
+            detail: `Δi = ${dI.toFixed(3)} % ≥ Δi_min = 0,1·a = ${dMin.toFixed(2)} %` }, tol));
         });
       }
     }
+    return out.map(el => Object.assign(el, { status: aggStatus(el.checks) }));
+  }
+
+  // Conservée pour compatibilité (le contrôle est désormais intégré à evaluateHorizontal)
+  function evaluateSConsecutiveClothoids(horizEvaluated) {
+    const notes = [];
+    horizEvaluated.forEach(el => (el.checks || []).filter(c => c.key === 'S').forEach(c => notes.push({ idxA: el.idx, ok: c.ok, ratio: c.value, detail: c.detail })));
     return notes;
   }
 
   function evaluateVertical(vertElements, params) {
     const Vp = params.Vp || 80;
+    const tol = params.tolerance > 0 ? params.tolerance : 0;
+    const calc = Object.assign({}, CALC_DEFAULT, params.calc || {});
     const rvMinComf = RvMinComfort(Vp);
     const iMax = iMaxNorm(Vp);
     // f_L proposé depuis la table officielle (Tab. 17.7) par défaut, substituable par l'utilisateur
@@ -402,57 +490,47 @@
     const tr = params.tr != null ? params.tr : 2.0; // VSS 40 090b — confirmé officiellement
     return vertElements.map((el, idx) => {
       const checks = [];
+      const extra = {};
       if (el.type === 'RayonVertical') {
-        // Retour utilisateur : les valeurs du Tab.2 VSS 40 110 sont des OPTIMUMS indicatifs, pas des valeurs
-        // limites. Le contrôle pratique réel se fait via la visibilité d'arrêt (S_D vs S_A) et le confort
-        // dynamique — ce sont ces deux critères qui sont bloquants ; le Tab.2 reste affiché à titre de référence.
-        const rvMinNorm = RvMinNorm(Vp, el.shape);
-        checks.push({
-          label: `Rv ≥ Rv-min optimum ${el.shape} (${Vp} km/h, VSS 40 110 Tab.2 — valeur indicative)`,
-          value: el.radius, threshold: rvMinNorm,
-          ok: el.radius >= rvMinNorm,
-          detail: `Rv = ${el.radius.toFixed(1)} m vs Rv-min optimum = ${rvMinNorm.toFixed(1)} m (${el.shape}) — valeur recommandée, pas une limite`,
-          severity: 'info',
-        });
-        // Critère de confort dynamique — BLOQUANT (contrôle pratique de référence)
-        checks.push({
-          label: `Rv ≥ Rv-min confort(${Vp} km/h)`,
-          value: el.radius, threshold: rvMinComf,
-          ok: el.radius >= rvMinComf,
-          detail: `Rv = ${el.radius.toFixed(1)} m vs Rv-min confort = ${rvMinComf.toFixed(1)} m`,
-        });
-        // S_A : visibilité disponible (raccordement convexe, cas sans dépassement) vs distance d'arrêt requise — BLOQUANT
-        if (el.shape === 'convexe') {
-          const sD = sightDistanceConvex(el.radius);
-          const iMoy = ((el.gradeIn || 0) + (el.gradeOut || 0)) / 2;
-          const sA = stoppingDistance(Vp, tr, fL, iMoy);
-          checks.push({
-            label: `S_D ≥ S_A (visibilité d'arrêt, VSS 40 090b/40 110)`,
-            value: sD, threshold: sA,
-            ok: sD >= sA,
-            detail: `S_D ≈ 2√Rv = ${sD.toFixed(1)} m vs S_A ≈ ${sA.toFixed(1)} m (t=${tr}s, f_L=${fL.toFixed(2)} [${fLRegime}]) — seuls les abaques officiels VSS 40 090b font foi en cas de litige`,
-          });
+        // Géométrie du raccordement (VSS 40 110 Annexe 1) : T_V = R·Δi/2, f = T_V²/(2R)
+        const dg = Math.abs((el.gradeOut || 0) - (el.gradeIn || 0));
+        extra.tv = el.radius * dg / 2;
+        extra.fv = extra.tv * extra.tv / (2 * el.radius);
+        const iMoy = ((el.gradeIn || 0) + (el.gradeOut || 0)) / 2;
+        extra.sA = stoppingDistance(Vp, tr, fL, iMoy); // distance d'arrêt requise
+        extra.sD = el.shape === 'convexe' ? sightDistanceConvex(el.radius) : null; // distance de visibilité disponible
+        if (calc.vert) {
+          // Retour utilisateur : les valeurs du Tab.2 VSS 40 110 sont des OPTIMUMS indicatifs, pas des limites.
+          // Contrôles bloquants : confort dynamique et visibilité d'arrêt (S_D ≥ S_A).
+          const rvMinNorm = RvMinNorm(Vp, el.shape);
+          checks.push(mkCheck({
+            key: 'RvOpt', label: `Rv ≥ Rv-min optimum ${el.shape} (VSS 40 110 Tab.2 — indicatif)`, kind: 'min', value: el.radius, limit: rvMinNorm, unit: 'm', severity: 'info',
+            detail: `Rv = ${el.radius.toFixed(1)} m ≥ Rv-min optimum = ${rvMinNorm.toFixed(1)} m (${el.shape}) — valeur recommandée, pas une limite`,
+          }, tol));
+          checks.push(mkCheck({
+            key: 'RvConf', label: `Rv ≥ Rv-min confort(${Vp} km/h)`, kind: 'min', value: el.radius, limit: rvMinComf, unit: 'm',
+            detail: `Rv = ${el.radius.toFixed(1)} m ≥ Rv-min confort = ${rvMinComf.toFixed(1)} m`,
+          }, tol));
+        }
+        if (calc.visib && extra.sD != null) {
+          checks.push(mkCheck({
+            key: 'SD', label: `S_D ≥ S_A (visibilité d'arrêt, VSS 40 090b/40 110)`, kind: 'min', value: extra.sD, limit: extra.sA, unit: 'm',
+            detail: `S_D = 2√Rv = ${extra.sD.toFixed(1)} m ≥ S_A = ${extra.sA.toFixed(1)} m (t=${tr} s, f_L=${fL.toFixed(2)} [${fLRegime}])`,
+          }, tol));
         }
       }
-      if (el.type === 'Tangente') {
+      if (el.type === 'Tangente' && calc.vert) {
         const absI = Math.abs(el.grade) * 100;
-        checks.push({
-          label: `Déclivité ≤ i_max(${Vp} km/h) = ${iMax.toFixed(1)}% (VSS 40 110 Tab.1)`,
-          value: absI, threshold: iMax,
-          ok: absI <= iMax,
-          detail: `i = ${(el.grade * 100).toFixed(2)} % vs i_max = ${iMax.toFixed(1)} %`,
-        });
-        checks.push({
-          label: `Déclivité ≥ i_min = ${I_MIN_NORM}% (drainage, VSS 40 110 §11)`,
-          value: absI, threshold: I_MIN_NORM,
-          ok: absI >= I_MIN_NORM,
-          detail: `i = ${(el.grade * 100).toFixed(2)} % vs i_min = ${I_MIN_NORM} % (recommandation, pas une valeur limite)`,
-          severity: 'info',
-        });
+        checks.push(mkCheck({
+          key: 'imax', label: `Déclivité ≤ i_max(${Vp} km/h) (VSS 40 110 Tab.1)`, kind: 'max', value: absI, limit: iMax, unit: '%',
+          detail: `|i| = ${absI.toFixed(2)} % ≤ i_max = ${iMax.toFixed(1)} %`,
+        }, tol));
+        checks.push(mkCheck({
+          key: 'imin', label: `Déclivité ≥ i_min = ${I_MIN_NORM}% (drainage, VSS 40 110 §11)`, kind: 'min', value: absI, limit: I_MIN_NORM, unit: '%', severity: 'info',
+          detail: `|i| = ${absI.toFixed(2)} % ≥ i_min = ${I_MIN_NORM} % (recommandation, pas une valeur limite)`,
+        }, tol));
       }
-      const blocking = checks.filter(c => c.severity !== 'info');
-      const status = checks.length === 0 ? 'info' : (blocking.length === 0 ? 'info' : (blocking.every(c => c.ok) ? 'ok' : 'fail'));
-      return Object.assign({}, el, { idx, checks, status });
+      return Object.assign({}, el, extra, { idx, checks, status: aggStatus(checks) });
     });
   }
 
@@ -617,6 +695,6 @@
     NORMALIZED_VEHICLES, swept, checkOETVring,
     SURLARGEUR_CATEGORIES, surlargeurMax, evaluateSurlargeur,
     sampleElement, sampleLine, sampleCurve, sampleSpiral, dist2,
-    TYPE_LABELS_FR, typeLabelFR,
+    TYPE_LABELS_FR, typeLabelFR, mkCheck, aggStatus, CALC_DEFAULT, L_GMIN_TABLE, L_ARC_MIN_TABLE,
   };
 });
