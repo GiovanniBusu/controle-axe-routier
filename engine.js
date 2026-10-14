@@ -278,6 +278,14 @@
     // cette formule analytique est qualifiée de « simplifiée » par le texte normatif.
     return (VkmH / 3.6) * tr + (VkmH * VkmH) / (254 * (fL + i));
   }
+  // Distance de visibilité de dépassement D_d (VSS 40 090b, valeurs S_U) — interpolée, bornée à 60–100 km/h
+  const DD_TABLE = { 60: 450, 70: 500, 80: 550, 90: 575, 100: 625 };
+  const VISIB_CASES = {
+    A: { label: 'A — 1 voie, sens unique', sCase: 1, req: 'Da' },
+    B: { label: 'B — 1 voie, double sens', sCase: 2, req: 'Dr' },
+    C: { label: 'C — 2 voies, dépassement interdit', sCase: 1, req: 'Da' },
+    D: { label: 'D — 2 voies, dépassement autorisé', sCase: 2, req: 'Dd' },
+  };
   function RvMinComfort(VkmH) { // Rv-min = v[m/s]² / 0.8   (feuille DistVisibilité!F32) — critère de confort uniquement
     const v = VkmH / 3.6;
     return (v * v) / 0.8;
@@ -497,8 +505,13 @@
         extra.tv = el.radius * dg / 2;
         extra.fv = extra.tv * extra.tv / (2 * el.radius);
         const iMoy = ((el.gradeIn || 0) + (el.gradeOut || 0)) / 2;
-        extra.sA = stoppingDistance(Vp, tr, fL, iMoy); // distance d'arrêt requise
-        extra.sD = el.shape === 'convexe' ? sightDistanceConvex(el.radius) : null; // distance de visibilité disponible
+        extra.sA = stoppingDistance(Vp, tr, fL, iMoy); // distance d'arrêt D_a
+        const vc = VISIB_CASES[params.visibCase] || VISIB_CASES.A;
+        extra.visibCase = vc;
+        // distance requise selon le cas : A/C → D_a ; B → D_r (hypothèse D_r = 2·D_a) ; D → D_d (table S_U, VSS 40 090b)
+        extra.sReq = vc.req === 'Da' ? extra.sA : (vc.req === 'Dr' ? 2 * extra.sA : interpVpTable(DD_TABLE, Vp));
+        // visibilité disponible (convexe) : S1 = 2·√Rv (h_g = 0,15 m) ; S2 = √(8·Rv) (h_g = 1,00 m)
+        extra.sD = el.shape === 'convexe' ? (vc.sCase === 1 ? 2 * Math.sqrt(Math.max(0, el.radius)) : Math.sqrt(8 * Math.max(0, el.radius))) : null;
         if (calc.vert) {
           // Retour utilisateur : les valeurs du Tab.2 VSS 40 110 sont des OPTIMUMS indicatifs, pas des limites.
           // Contrôles bloquants : confort dynamique et visibilité d'arrêt (S_D ≥ S_A).
@@ -513,11 +526,16 @@
           }, tol));
         }
         if (calc.visib && extra.sD != null) {
+          const vc2 = extra.visibCase, nm = vc2.sCase === 1 ? 'S1 = 2√Rv' : 'S2 = √(8·Rv)';
+          const rq = vc2.req === 'Da' ? 'D_a' : (vc2.req === 'Dr' ? 'D_r = 2·D_a' : 'D_d');
           checks.push(mkCheck({
-            key: 'SD', label: `S_D ≥ S_A (visibilité d'arrêt, VSS 40 090b/40 110)`, kind: 'min', value: extra.sD, limit: extra.sA, unit: 'm',
-            detail: `S_D = 2√Rv = ${extra.sD.toFixed(1)} m ≥ S_A = ${extra.sA.toFixed(1)} m (t=${tr} s, f_L=${fL.toFixed(2)} [${fLRegime}])`,
+            key: 'SD', label: `${vc2.sCase === 1 ? 'S1' : 'S2'} ≥ ${rq} (visibilité, Formule 21.6)`, kind: 'min', value: extra.sD, limit: extra.sReq, unit: 'm',
+            detail: `Cas ${vc2.label} : ${nm} = ${extra.sD.toFixed(1)} m ≥ ${rq} = ${extra.sReq.toFixed(1)} m (D_a = ${extra.sA.toFixed(1)} m ; t=${tr} s, f_L=${fL.toFixed(2)} [${fLRegime}])`,
           }, tol));
         }
+      }
+      if (el.type === 'Tangente' && calc.visib) {
+        extra.sA = stoppingDistance(Vp, tr, fL, el.grade); // D_a en alignement droit (déclivité signée : rampe +, pente −)
       }
       if (el.type === 'Tangente' && calc.vert) {
         const absI = Math.abs(el.grade) * 100;
@@ -695,6 +713,6 @@
     NORMALIZED_VEHICLES, swept, checkOETVring,
     SURLARGEUR_CATEGORIES, surlargeurMax, evaluateSurlargeur,
     sampleElement, sampleLine, sampleCurve, sampleSpiral, dist2,
-    TYPE_LABELS_FR, typeLabelFR, mkCheck, aggStatus, CALC_DEFAULT, L_GMIN_TABLE, L_ARC_MIN_TABLE,
+    VISIB_CASES, DD_TABLE, TYPE_LABELS_FR, typeLabelFR, mkCheck, aggStatus, CALC_DEFAULT, L_GMIN_TABLE, L_ARC_MIN_TABLE,
   };
 });

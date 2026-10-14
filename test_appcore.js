@@ -24,7 +24,7 @@ for (const path of files) {
     console.log(`--- Alignment "${al.name}" (${al.horiz.length} éléments horiz, ${al.vertRaw.length} pts vert) ---`);
     let model;
     try {
-      model = AppCore.buildModel(al, { Vp: 80, fT: 0.12, q: 0.07, vehicleKey: 'Bus12', tolerance: 0.05, largeurVoie: 3.25, deltaIMax: 1.5 });
+      model = AppCore.buildModel(al, { Vp: 80, fT: 0.12, q: 0.07, vehicleKey: 'Bus12', toleranceH: 0.05, toleranceV: 0.02, visibCase: 'D', largeurVoie: 3.25, deltaIMax: 1.5 });
     } catch (e) {
       console.log('ERREUR buildModel:', e.message, e.stack); totalErrors++; continue;
     }
